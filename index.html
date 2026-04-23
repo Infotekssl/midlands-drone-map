@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Midlands Drone Sites</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f7f6f2; --surface: #f9f8f5; --surface2: #fbfbf9; --offset: #f3f0ec;
+      --border: #d4d1ca; --divider: #dcd9d5; --text: #28251d; --muted: #7a7974;
+      --primary: #01696f; --primary-bg: #cedcd8;
+      --warning: #964219; --warning-bg: #ddcfc6;
+      --error: #a12c7b; --success: #437a22; --success-bg: #d4dfcc; --blue: #006494;
+      --shadow: 0 4px 12px rgba(0,0,0,0.08); --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
+      --r: 0.5rem; --r-lg: 0.75rem; --t: 180ms cubic-bezier(0.16,1,0.3,1);
+      --col-nt:   #ef7620;
+      --col-sssi: #a12c7b;
+      --col-aonb: #006494;
+      --col-nnr:  #437a22;
+      --col-mht:  #8e44ad;
+      --col-raby: #7a5c1e;
+    }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; background: var(--bg); color: var(--text); overflow: hidden; }
+    body { display: flex; flex-direction: column; }
+    button { cursor: pointer; background: none; border: none; font: inherit; color: inherit; }
+    a { color: var(--primary); }
+
+    .hdr { display: flex; align-items: center; padding: 0.55rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 500; gap: 0.75rem; }
+    .hdr-left { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0; }
+    .hdr-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hdr-sub { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .hdr-logo { width: 26px; height: 26px; flex-shrink: 0; }
+    .hdr-count { font-size: 11px; font-weight: 700; color: var(--primary); background: var(--primary-bg); border-radius: 9999px; padding: 0.15rem 0.5rem; white-space: nowrap; flex-shrink: 0; }
+
+    #map { flex: 1; min-height: 0; z-index: 1; }
+    .leaflet-container { background: #e8e4dc; }
+    .leaflet-control-attribution { font-size: 9px !important; }
+
+    /* site pill bar */
+    .site-bar { position: absolute; top: 0.6rem; left: 0; right: 0; z-index: 400; display: flex; gap: 0.35rem; padding: 0 0.6rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; pointer-events: none; }
+    .site-bar::-webkit-scrollbar { display: none; }
+    .site-pill { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.32rem 0.65rem; border-radius: 9999px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow); cursor: pointer; pointer-events: all; border: 2px solid transparent; transition: all var(--t); }
+    .site-pill:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.14); }
+    .site-pill.active { border-color: rgba(255,255,255,0.7); transform: translateY(-1px); }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.75); flex-shrink: 0; }
+
+    /* layer toggle — bottom-right above zoom */
+    .layer-toggle {
+      position: absolute; bottom: 120px; right: 10px;
+      z-index: 400; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--r);
+      box-shadow: var(--shadow); padding: 0.45rem 0.55rem;
+      display: flex; flex-direction: column; gap: 0.3rem; min-width: 120px;
+    }
+    .layer-toggle-title { font-size: 9.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.1rem; }
+    .layer-row { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+    .layer-row input[type=checkbox] { width: 13px; height: 13px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
+    .layer-swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+    .layer-label { font-size: 10px; font-weight: 600; white-space: nowrap; }
+
+    /* panel */
+    .panel { position: absolute; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: var(--shadow-lg); z-index: 400; transition: transform var(--t); max-height: 72vh; display: flex; flex-direction: column; }
+    .panel.closed { transform: translateY(calc(100% - 50px)); }
+    .panel-grip { padding: 0.5rem 1rem 0; cursor: pointer; flex-shrink: 0; user-select: none; -webkit-user-select: none; }
+    .panel-grip-bar { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 0.4rem; }
+    .panel-tabs { display: flex; border-bottom: 1px solid var(--divider); flex-shrink: 0; padding: 0 0.75rem; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; }
+    .panel-tabs::-webkit-scrollbar { display: none; }
+    .tab { padding: 0.35rem 0.55rem; font-size: 11.5px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--t), border-color var(--t); white-space: nowrap; }
+    .tab.on { color: var(--primary); border-bottom-color: var(--primary); }
+    .panel-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 0.75rem 0.875rem 2rem; flex: 1; }
+
+    /* site header */
+    .site-hdr { display: flex; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.75rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--divider); }
+    .site-badge-big { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .site-info-name { font-size: 15px; font-weight: 700; line-height: 1.2; }
+    .site-info-sub { font-size: 11px; color: var(--muted); margin-top: 0.15rem; }
+    .site-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
+    .tag { font-size: 9.5px; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tag-nt   { background: rgba(239,118,32,0.15); color: #964219; }
+    .tag-sssi { background: rgba(161,44,123,0.12); color: #a12c7b; }
+    .tag-aonb { background: rgba(0,100,148,0.12);  color: #006494; }
+    .tag-fe   { background: rgba(67,122,34,0.12);  color: #437a22; }
+    .tag-sm   { background: rgba(150,66,25,0.12);  color: #964219; }
+    .tag-re   { background: rgba(100,80,40,0.12);  color: #6b5020; }
+    .tag-mht  { background: rgba(142,68,173,0.12); color: #8e44ad; }
+
+    /* LP cards */
+    .lp-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .lp-card { border-radius: var(--r); border: 1px solid var(--border); background: var(--surface2); overflow: hidden; cursor: pointer; transition: border-color var(--t); }
+    .lp-card:hover, .lp-card.active { border-color: var(--primary); }
+    .lp-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.65rem; }
+    .lp-dot { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .dot-g { background: #437a22; } .dot-a { background: #964219; } .dot-r { background: #a12c7b; } .dot-b { background: #006494; }
+    .lp-name { font-size: 12.5px; font-weight: 600; flex: 1; }
+    .badge { font-size: 9px; font-weight: 700; padding: 0.15rem 0.38rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    .badge-go { background: var(--success-bg); color: var(--success); }
+    .badge-caut { background: var(--warning-bg); color: var(--warning); }
+    .badge-no { background: rgba(161,44,123,0.12); color: var(--error); }
+    .badge-ref { background: var(--primary-bg); color: var(--primary); }
+    .lp-body { padding: 0 0.65rem 0.65rem; display: none; }
+    .lp-card.open .lp-body { display: block; }
+    .lp-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.18rem 0.45rem; font-size: 11px; margin-bottom: 0.45rem; }
+    .mk { color: var(--muted); } .mv { font-weight: 500; }
+    .mono { font-family: 'SF Mono','Cascadia Code','Fira Code',monospace; font-size: 10px; }
+    .lp-note { font-size: 11px; color: var(--muted); line-height: 1.5; border-top: 1px solid var(--divider); padding-top: 0.4rem; }
+    .lp-warn { font-size: 10.5px; color: var(--warning); line-height: 1.5; margin-top: 0.3rem; }
+    .btn-maps { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.45rem; padding: 0.28rem 0.65rem; border-radius: var(--r); background: var(--primary-bg); color: var(--primary); font-size: 10.5px; font-weight: 600; text-decoration: none; transition: background var(--t); }
+    .btn-maps:hover { background: var(--border); }
+
+    /* overview */
+    .overview-grid { display: flex; flex-direction: column; gap: 0.4rem; }
+    .ov-card { border-radius: var(--r); border: 1px solid var(--border); background: var(--surface2); overflow: hidden; cursor: pointer; transition: border-color var(--t); }
+    .ov-card:hover { border-color: var(--primary); }
+    .ov-row { display: flex; align-items: center; gap: 0.55rem; padding: 0.6rem 0.7rem; }
+    .ov-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .ov-info { flex: 1; min-width: 0; }
+    .ov-name { font-size: 13px; font-weight: 700; }
+    .ov-meta { font-size: 10.5px; color: var(--muted); margin-top: 0.1rem; }
+    .ov-arrow { color: var(--muted); font-size: 14px; }
+
+    /* legend */
+    .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.6rem; }
+    .leg-item { display: flex; align-items: flex-start; gap: 0.4rem; padding: 0.45rem 0.55rem; background: var(--surface2); border-radius: var(--r); border: 1px solid var(--divider); }
+    .leg-sw { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; margin-top: 1px; }
+    .leg-sw.dashed { border-style: dashed !important; }
+    .leg-lbl { font-size: 11px; font-weight: 600; }
+    .leg-sub { font-size: 9.5px; color: var(--muted); line-height: 1.3; }
+
+    /* rules */
+    .rule-group { margin-bottom: 0.875rem; }
+    .rule-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.4rem; }
+    .rule-row { display: flex; gap: 0.4rem; align-items: flex-start; font-size: 11.5px; line-height: 1.5; margin-bottom: 0.3rem; }
+    .rdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+    .rdot-g { background: #437a22; } .rdot-a { background: #964219; } .rdot-r { background: #a12c7b; } .rdot-b { background: #006494; }
+    .disclaimer { font-size: 10.5px; color: var(--muted); line-height: 1.5; background: var(--offset); border-radius: var(--r); padding: 0.5rem 0.6rem; border: 1px solid var(--divider); margin-top: 0.5rem; }
+
+    /* ── ADD POINT BUTTON ── */
+    .btn-add-point {
+      position: absolute; bottom: 190px; right: 10px; z-index: 401;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 300; line-height: 1;
+      transition: background var(--t), transform var(--t);
+      border: 2.5px solid rgba(255,255,255,0.7);
+    }
+    .btn-add-point:hover { background: #015459; transform: scale(1.08); }
+    .btn-add-point.adding { background: #964219; transform: scale(1.08); }
+    .btn-add-point-label {
+      position: absolute; bottom: 195px; right: 58px; z-index: 401;
+      background: var(--text); color: #fff;
+      font-size: 10px; font-weight: 600; white-space: nowrap;
+      padding: 0.2rem 0.5rem; border-radius: var(--r);
+      pointer-events: none; opacity: 0; transition: opacity var(--t);
+    }
+    .btn-add-point-label.vis { opacity: 1; }
+
+    /* ── CROSSHAIR CURSOR ── */
+    .map-adding { cursor: crosshair !important; }
+    .map-adding .leaflet-interactive { cursor: crosshair !important; }
+    .add-banner {
+      position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+      z-index: 410; background: #964219; color: #fff;
+      font-size: 12px; font-weight: 600; padding: 0.4rem 0.9rem;
+      border-radius: 9999px; box-shadow: var(--shadow);
+      white-space: nowrap; pointer-events: none;
+      animation: fadeSlideDown 0.2s ease;
+    }
+    @keyframes fadeSlideDown { from { opacity:0; transform:translateX(-50%) translateY(-6px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+
+    /* ── ADD POINT FORM SHEET ── */
+    .add-sheet {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 420;
+      background: var(--surface); border-top: 1px solid var(--border);
+      border-radius: var(--r-lg) var(--r-lg) 0 0;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.16,1,0.3,1);
+      max-height: 82vh; display: flex; flex-direction: column;
+    }
+    .add-sheet.open { transform: translateY(0); }
+    .add-sheet-hdr {
+      display: flex; align-items: center; padding: 0.75rem 0.875rem 0;
+      flex-shrink: 0;
+    }
+    .add-sheet-title { font-size: 14px; font-weight: 700; flex: 1; }
+    .add-sheet-coords { font-size: 10.5px; color: var(--muted); font-family: monospace; margin-top: 0.15rem; }
+    .add-sheet-close {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--offset); color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .add-sheet-close:hover { background: var(--border); }
+    .add-sheet-body { overflow-y: auto; padding: 0.6rem 0.875rem 1.5rem; flex: 1; }
+    .form-row { margin-bottom: 0.6rem; }
+    .form-label { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; display: block; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; padding: 0.48rem 0.6rem;
+      border: 1px solid var(--border); border-radius: var(--r);
+      background: var(--surface2); color: var(--text);
+      font: inherit; font-size: 13px;
+      transition: border-color var(--t);
+      -webkit-appearance: none; appearance: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none; border-color: var(--primary);
+    }
+    .form-textarea { resize: vertical; min-height: 58px; }
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .form-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+    .btn-save {
+      flex: 1; padding: 0.6rem; border-radius: var(--r);
+      background: var(--primary); color: #fff;
+      font-size: 13px; font-weight: 700;
+      transition: background var(--t);
+    }
+    .btn-save:hover { background: #015459; }
+    .btn-cancel {
+      padding: 0.6rem 0.9rem; border-radius: var(--r);
+      background: var(--offset); color: var(--muted);
+      font-size: 13px; font-weight: 600;
+      border: 1px solid var(--border);
+      transition: background var(--t);
+    }
+    .btn-cancel:hover { background: var(--border); }
+
+    /* ── MY POINTS TAB ── */
+    .my-empty { text-align: center; padding: 2rem 1rem; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+    .my-empty-icon { font-size: 32px; margin-bottom: 0.5rem; }
+    .my-card {
+      border-radius: var(--r); border: 1px solid var(--border);
+      background: var(--surface2); margin-bottom: 0.4rem; overflow: hidden;
+    }
+    .my-card-head {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.55rem 0.65rem; cursor: pointer;
+    }
+    .my-card-head:hover { background: var(--offset); }
+    .my-card-name { font-size: 12.5px; font-weight: 600; flex: 1; }
+    .my-card-body { padding: 0 0.65rem 0.65rem; display: none; }
+    .my-card.open .my-card-body { display: block; }
+    .my-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.18rem 0.45rem; font-size: 11px; margin-bottom: 0.5rem; }
+    .my-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .btn-sm {
+      font-size: 10.5px; font-weight: 600; padding: 0.25rem 0.6rem;
+      border-radius: var(--r); border: 1px solid var(--border);
+      background: var(--offset); color: var(--text);
+      transition: background var(--t);
+    }
+    .btn-sm:hover { background: var(--border); }
+    .btn-sm.danger { color: var(--error); border-color: rgba(161,44,123,0.3); }
+    .btn-sm.danger:hover { background: rgba(161,44,123,0.1); }
+    /* inline delete confirmation */
+    .delete-confirm {
+      display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+      background: rgba(161,44,123,0.08); border: 1px solid rgba(161,44,123,0.25);
+      border-radius: var(--r); padding: 0.35rem 0.55rem; margin-top: 0.4rem;
+      font-size: 11px; color: var(--error);
+    }
+    .delete-confirm span { flex: 1; font-weight: 600; }
+    .btn-confirm-yes {
+      font-size: 10.5px; font-weight: 700; padding: 0.22rem 0.6rem;
+      border-radius: var(--r); background: var(--error); color: #fff;
+      border: none; cursor: pointer;
+    }
+    .btn-confirm-yes:hover { opacity: 0.85; }
+    .btn-confirm-no {
+      font-size: 10.5px; font-weight: 600; padding: 0.22rem 0.55rem;
+      border-radius: var(--r); background: var(--offset); color: var(--muted);
+      border: 1px solid var(--border); cursor: pointer;
+    }
+    .btn-confirm-no:hover { background: var(--border); }
+    .btn-sm.primary { background: var(--primary-bg); color: var(--primary); border-color: transparent; }
+    .btn-sm.primary:hover { background: var(--border); }
+    .export-box {
+      margin-top: 0.5rem; background: #1e1e1e; color: #d4d4d4;
+      border-radius: var(--r); padding: 0.6rem 0.7rem;
+      font-size: 10px; font-family: 'SF Mono','Cascadia Code','Fira Code',monospace;
+      white-space: pre-wrap; word-break: break-all; line-height: 1.5;
+      border: 1px solid #333; display: none;
+    }
+    .export-box.vis { display: block; }
+
+    /* ── BOUNDARY DETECTION ── */
+    .bdet-status {
+      display: flex; align-items: center; gap: 0.45rem;
+      padding: 0.45rem 0.6rem; margin: 0.5rem 0 0;
+      border-radius: var(--r); border: 1px solid var(--divider);
+      background: var(--offset); font-size: 11px; min-height: 36px;
+    }
+    .bdet-spinner {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid var(--border); border-top-color: var(--primary);
+      animation: spin 0.7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .bdet-text { font-size: 11px; color: var(--muted); }
+    .bdet-results {
+      display: flex; flex-direction: column; gap: 0.25rem;
+      margin: 0.5rem 0 0;
+    }
+    .bdet-tag {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      font-size: 10px; font-weight: 700; padding: 0.2rem 0.5rem;
+      border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .bdet-tag-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem; }
+    .bdet-none { font-size: 10.5px; color: var(--muted); margin-top: 0.4rem; font-style: italic; }
+    .bdet-error { font-size: 10.5px; color: var(--warning); margin-top: 0.4rem; }
+    .bdet-tag.nt   { background: rgba(239,118,32,0.15); color: #964219; }
+    .bdet-tag.sssi { background: rgba(161,44,123,0.12); color: #a12c7b; }
+    .bdet-tag.aonb { background: rgba(0,100,148,0.12);  color: #006494; }
+    /* boundary highlight pulse on map */
+    .bdet-highlight-layer { z-index: 500; }
+
+    /* custom user-pinned markers */
+    .custom-lp-icon { background: none !important; border: none !important; }
+
+    /* popup */
+    .lpopup { min-width: 170px; font-family: inherit; }
+    .lpopup-site { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.2rem; }
+    .lpopup-name { font-size: 13px; font-weight: 700; margin-bottom: 0.2rem; }
+    .lpopup-coord { font-size: 10px; font-family: monospace; color: var(--muted); }
+    .lpopup-status { font-size: 11px; font-weight: 600; margin-top: 0.3rem; }
+    .s-go { color: #437a22; } .s-caut { color: #964219; } .s-no { color: #a12c7b; } .s-ref { color: #006494; }
+    .leaflet-popup-content-wrapper { border-radius: 8px !important; box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important; padding: 0 !important; }
+    .leaflet-popup-content { margin: 10px 12px !important; }
+    .leaflet-popup-close-button { font-size: 18px !important; top: 4px !important; right: 6px !important; }
+  </style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-left">
+    <svg class="hdr-logo" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+      <circle cx="13" cy="13" r="8" stroke="currentColor" stroke-width="1.4" opacity="0.25"/>
+      <circle cx="13" cy="13" r="4.5" stroke="#01696f" stroke-width="1.6"/>
+      <circle cx="13" cy="13" r="1.8" fill="#01696f"/>
+      <line x1="13" y1="2" x2="13" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+      <line x1="13" y1="19" x2="13" y2="24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+      <line x1="2" y1="13" x2="7" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+      <line x1="19" y1="13" x2="24" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+    </svg>
+    <div>
+      <div class="hdr-title">Midlands Drone Sites</div>
+      <div class="hdr-sub">Mini 5 Pro · 9 locations · Wolverhampton base</div>
+    </div>
+  </div>
+  <span class="hdr-count">9 sites</span>
+</header>
+
+<div id="map-wrap" style="position:relative; flex:1; min-height:0; display:flex; flex-direction:column;">
+  <div id="map" style="flex:1;"></div>
+
+  <div class="site-bar" id="siteBar"></div>
+
+  <!-- Add Point Button -->
+  <button class="btn-add-point" id="btnAddPoint" title="Add a launch point" onclick="toggleAddMode()">+</button>
+  <div class="btn-add-point-label" id="addPointLabel">Tap map to pin</div>
+
+  <!-- Add Point Form Sheet -->
+  <div class="add-sheet" id="addSheet">
+    <div class="add-sheet-hdr">
+      <div>
+        <div class="add-sheet-title">New Launch Point</div>
+        <div class="add-sheet-coords" id="sheetCoords"></div>
+      </div>
+      <button class="add-sheet-close" onclick="closeAddSheet()">✕</button>
+    </div>
+    <!-- Save/Cancel at TOP so panel grip cannot block them -->
+    <div class="form-actions" style="padding:0.5rem 0.875rem 0;flex-shrink:0;">
+      <button type="button" class="btn-cancel" id="btnCancel" onclick="closeAddSheet()">Cancel</button>
+      <button type="button" class="btn-save" id="btnSave" onclick="savePoint()">Save Point</button>
+    </div>
+    <!-- Hidden coordinate fields — set by openAddSheet(), read by savePoint() -->
+    <input type="hidden" id="fLat" value="">
+    <input type="hidden" id="fLon" value="">
+    <div class="add-sheet-body">
+      <div class="form-row">
+        <label class="form-label" for="fName">Point Name <span style="color:#a12c7b">*</span></label>
+        <input class="form-input" id="fName" type="text" placeholder="e.g. Clun Valley Road Verge" autocomplete="off"/>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label class="form-label" for="fLabel">Label</label>
+          <select class="form-select" id="fLabel">
+            <option value="LP1">LP1</option>
+            <option value="LP2">LP2</option>
+            <option value="LP3">LP3</option>
+            <option value="REF">REF</option>
+            <option value="SUM">SUM</option>
+            <option value="CAR">CAR</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label" for="fStatus">Status</label>
+          <select class="form-select" id="fStatus">
+            <option value="go">✓ Viable TOAL</option>
+            <option value="caution">⚠ Caution</option>
+            <option value="no">✕ No Launch</option>
+            <option value="ref">◎ Reference</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="fSurf">Surface / Access</label>
+        <input class="form-input" id="fSurf" type="text" placeholder="e.g. Tarmac road verge" autocomplete="off"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="fLand">Land Type</label>
+        <input class="form-input" id="fLand" type="text" placeholder="e.g. Public highway — NOT NT" autocomplete="off"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="fNotes">Notes</label>
+        <textarea class="form-textarea" id="fNotes" placeholder="Why this point, what to watch for…"></textarea>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="fWarn">Caution / Warning (optional)</label>
+        <textarea class="form-textarea" id="fWarn" placeholder="Any restrictions, byelaws, seasonal notes…" style="min-height:44px;"></textarea>
+      </div>
+      <div id="bdetStatus"></div>
+    </div>
+  </div>
+
+  <!-- Layer toggle -->
+  <div class="layer-toggle" id="layerToggle">
+    <div class="layer-toggle-title">Boundaries</div>
+    <label class="layer-row"><input type="checkbox" id="chk-nt" checked onchange="toggleLayer('nt',this.checked)"><span class="layer-swatch" style="background:rgba(239,118,32,0.35);border:2px solid #ef7620;"></span><span class="layer-label" style="color:#964219">NT Land</span></label>
+    <label class="layer-row"><input type="checkbox" id="chk-sssi" checked onchange="toggleLayer('sssi',this.checked)"><span class="layer-swatch" style="background:rgba(161,44,123,0.2);border:2px dashed #a12c7b;"></span><span class="layer-label" style="color:#a12c7b">SSSI</span></label>
+    <label class="layer-row"><input type="checkbox" id="chk-aonb" checked onchange="toggleLayer('aonb',this.checked)"><span class="layer-swatch" style="background:rgba(0,100,148,0.15);border:2px solid #006494;"></span><span class="layer-label" style="color:#006494">AONB / NL</span></label>
+    <label class="layer-row"><input type="checkbox" id="chk-other" checked onchange="toggleLayer('other',this.checked)"><span class="layer-swatch" style="background:rgba(142,68,173,0.15);border:2px dashed #8e44ad;"></span><span class="layer-label" style="color:#8e44ad">Other</span></label>
+  </div>
+
+  <div class="panel closed" id="panel">
+    <div class="panel-grip" id="grip"><div class="panel-grip-bar"></div></div>
+    <div class="panel-tabs" id="tabs">
+      <button class="tab on" data-t="overview">All Sites</button>
+      <button class="tab" data-t="points">Launch Points</button>
+      <button class="tab" data-t="mypoints">My Points</button>
+      <button class="tab" data-t="legend">Legend</button>
+      <button class="tab" data-t="rules">Rules</button>
+    </div>
+    <div class="panel-body" id="pbody"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// BOUNDARY DATA — OS grid cross-checked, April 2026
+// Polygons are approximations based on Natural England SSSI records,
+// NT property extents, and Shropshire Hills AONB boundary data.
+// Always verify on MAGIC (magic.defra.gov.uk) before flying.
+// ================================================================
+
+const BOUNDARIES = {
+  longmynd: {
+    sssi: [[52.5937,-2.7665],[52.5998,-2.7902],[52.6041,-2.8213],[52.6020,-2.8611],[52.5901,-2.8934],[52.5720,-2.9092],[52.5540,-2.9059],[52.5389,-2.8791],[52.5301,-2.8524],[52.5277,-2.8199],[52.5324,-2.7905],[52.5460,-2.7716],[52.5640,-2.7571],[52.5937,-2.7665]],
+    nt:   [[52.5909,-2.7723],[52.5971,-2.7961],[52.5995,-2.8286],[52.5948,-2.8654],[52.5810,-2.8991],[52.5630,-2.9090],[52.5450,-2.9043],[52.5335,-2.8834],[52.5301,-2.8568],[52.5285,-2.8273],[52.5341,-2.7979],[52.5486,-2.7804],[52.5667,-2.7719],[52.5909,-2.7723]],
+    aonb: null
+  },
+  wrekin: {
+    sssi: [[52.7002,-2.5079],[52.7028,-2.5272],[52.6955,-2.5567],[52.6846,-2.5817],[52.6684,-2.5903],[52.6549,-2.5857],[52.6460,-2.5664],[52.6434,-2.5457],[52.6489,-2.5191],[52.6598,-2.5015],[52.6760,-2.4973],[52.7002,-2.5079]],
+    nt:   null,
+    raby: [[52.6939,-2.5123],[52.6974,-2.5375],[52.6883,-2.5669],[52.6729,-2.5815],[52.6595,-2.5784],[52.6524,-2.5561],[52.6552,-2.5266],[52.6688,-2.5075],[52.6939,-2.5123]],
+    aonb: [[52.7002,-2.5079],[52.7028,-2.5272],[52.6955,-2.5567],[52.6846,-2.5817],[52.6684,-2.5903],[52.6549,-2.5857],[52.6460,-2.5664],[52.6434,-2.5457],[52.6489,-2.5191],[52.6598,-2.5015],[52.6760,-2.4973],[52.7002,-2.5079]]
+  },
+  clent: {
+    nt:   [[52.4316,-2.0680],[52.4361,-2.0827],[52.4361,-2.1048],[52.4289,-2.1268],[52.4163,-2.1415],[52.4046,-2.1370],[52.3983,-2.1194],[52.3965,-2.0929],[52.4019,-2.0723],[52.4136,-2.0606],[52.4316,-2.0680]],
+    sssi: null,
+    aonb: [[52.4406,-2.0533],[52.4451,-2.0901],[52.4405,-2.1268],[52.4225,-2.1562],[52.4000,-2.1635],[52.3866,-2.1414],[52.3821,-2.1046],[52.3893,-2.0679],[52.4046,-2.0459],[52.4406,-2.0533]]
+  },
+  kinver: {
+    nt:   [[52.4611,-2.2255],[52.4646,-2.2402],[52.4583,-2.2549],[52.4466,-2.2637],[52.4340,-2.2592],[52.4269,-2.2444],[52.4287,-2.2253],[52.4404,-2.2151],[52.4611,-2.2255]],
+    sssi: [[52.4647,-2.2196],[52.4700,-2.2447],[52.4628,-2.2667],[52.4466,-2.2784],[52.4286,-2.2739],[52.4197,-2.2547],[52.4224,-2.2297],[52.4359,-2.2107],[52.4647,-2.2196]],
+    aonb: null
+  },
+  stiperstones: {
+    sssi: [[52.6035,-2.8951],[52.6051,-2.9247],[52.5959,-2.9540],[52.5805,-2.9729],[52.5625,-2.9754],[52.5491,-2.9604],[52.5421,-2.9337],[52.5450,-2.9087],[52.5587,-2.8868],[52.5767,-2.8798],[52.6035,-2.8951]],
+    nt:   null,
+    nnr:  [[52.5990,-2.9024],[52.6015,-2.9290],[52.5923,-2.9495],[52.5760,-2.9639],[52.5599,-2.9636],[52.5492,-2.9456],[52.5494,-2.9191],[52.5631,-2.8987],[52.5811,-2.8902],[52.5990,-2.9024]],
+    aonb: [[52.6035,-2.8951],[52.6051,-2.9247],[52.5959,-2.9540],[52.5805,-2.9729],[52.5625,-2.9754],[52.5491,-2.9604],[52.5421,-2.9337],[52.5450,-2.9087],[52.5587,-2.8868],[52.5767,-2.8798],[52.6035,-2.8951]]
+  },
+  clee: {
+    sssi: null,
+    nt:   null,
+    aonb: [[52.4168,-2.5605],[52.4212,-2.5900],[52.4120,-2.6193],[52.3985,-2.6338],[52.3850,-2.6306],[52.3761,-2.6070],[52.3790,-2.5747],[52.3899,-2.5528],[52.4168,-2.5605]],
+    common: [[52.4095,-2.5781],[52.4121,-2.5972],[52.4058,-2.6118],[52.3968,-2.6161],[52.3896,-2.6072],[52.3879,-2.5895],[52.3943,-2.5720],[52.4060,-2.5721],[52.4095,-2.5781]]
+  },
+  cannock: {
+    sssi: null,
+    nt:   null,
+    aonb: [[52.7956,-2.0935],[52.8092,-2.0442],[52.8047,-1.9938],[52.7777,-1.9435],[52.7417,-1.8987],[52.6968,-1.8985],[52.6699,-1.9431],[52.6609,-1.9936],[52.6699,-2.0432],[52.7058,-2.0864],[52.7507,-2.0958],[52.7956,-2.0935]]
+  },
+  malvern: {
+    sssi: null,
+    nt:   null,
+    aonb: [[52.2469,-2.3094],[52.2514,-2.3314],[52.2378,-2.3532],[52.2153,-2.3677],[52.1838,-2.3748],[52.1433,-2.3744],[52.1119,-2.3668],[52.0895,-2.3521],[52.0805,-2.3301],[52.0851,-2.3083],[52.1031,-2.2938],[52.1391,-2.2867],[52.1795,-2.2870],[52.2155,-2.2945],[52.2469,-2.3094]],
+    mht:  [[52.2379,-2.3166],[52.2423,-2.3386],[52.2288,-2.3532],[52.2018,-2.3603],[52.1479,-2.3598],[52.1164,-2.3523],[52.0985,-2.3375],[52.0941,-2.3156],[52.1076,-2.3011],[52.1391,-2.2940],[52.1840,-2.2943],[52.2155,-2.3018],[52.2379,-2.3166]]
+  },
+  wenlock: {
+    sssi: [[52.5830,-2.5921],[52.5918,-2.6218],[52.5872,-2.6512],[52.5780,-2.6880],[52.5643,-2.7173],[52.5462,-2.7317],[52.5328,-2.7241],[52.5285,-2.6946],[52.5331,-2.6652],[52.5468,-2.6359],[52.5604,-2.6066],[52.5830,-2.5921]],
+    nt:   [[52.5739,-2.6068],[52.5783,-2.6290],[52.5737,-2.6510],[52.5645,-2.6804],[52.5509,-2.7023],[52.5374,-2.7021],[52.5331,-2.6799],[52.5377,-2.6505],[52.5514,-2.6212],[52.5739,-2.6068]],
+    aonb: [[52.5830,-2.5921],[52.5918,-2.6218],[52.5872,-2.6512],[52.5780,-2.6880],[52.5643,-2.7173],[52.5462,-2.7317],[52.5328,-2.7241],[52.5285,-2.6946],[52.5331,-2.6652],[52.5468,-2.6359],[52.5604,-2.6066],[52.5830,-2.5921]]
+  }
+};
+
+// ================================================================
+// SITE DATA
+// ================================================================
+const SITES = [
+  { id:'longmynd', name:'Long Mynd', emoji:'🏔', color:'#01696f', region:'Shropshire · 35mi SW', alt:'536m (Pole Bank)', tags:['SSSI','AONB','NT'], tagClasses:['tag-sssi','tag-aonb','tag-nt'], land:'National Trust plateau — road verge TOAL', difficulty:'Moderate', mapCenter:[52.543,-2.840], mapZoom:13,
+    points:[
+      {id:'lm1',label:'LP1',name:'Burway Road Top Layby',ll:[52.5458,-2.8517],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 423 945',alt:'~490m',surf:'Tarmac verge / layby',land:'Public highway verge — NOT NT',desc:'Road-end layby where The Burway levels onto the plateau. OSM-verified (Way 38080532). Verge is public highway — NOT NT land.',warn:'SSSI. Avoid Mar–Aug breeding season. Max 400ft AGL. Fly west over plateau only.'},
+      {id:'lm2',label:'LP2',name:'Burway Passing Place',ll:[52.5453,-2.8488],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 425 944',alt:'~475m',surf:'Gravel passing place',land:'Public highway verge — NOT NT',desc:'Formal passing place on upper single-track section. OSM-verified position.',warn:'Do not block passing place — park fully on verge.'},
+      {id:'lm3',label:'REF',name:'Carding Mill Valley CP',ll:[52.542364,-2.807307],status:'no',dot:'dot-r',bs:'badge-no',sc:'s-no',os:'SO 453 941',alt:'~190m',surf:'NT car park',land:'National Trust',desc:'Main NT visitor car park. Park here and hike up The Burway to launch points. DO NOT launch.',warn:'NT no-drone byelaw. Rangers present weekends.'},
+      {id:'lm4',label:'PKB',name:'Pole Bank Summit',ll:[52.544647,-2.863787],status:'ref',dot:'dot-b',bs:'badge-ref',sc:'s-ref',os:'SO 415 944',alt:'516m (1,693ft)',surf:'Open moorland — NT',land:'National Trust',desc:'Highest point on the Long Mynd. Navigation reference — visible from all Burway Road launch points.',warn:''}
+    ]
+  },
+  { id:'wrekin', name:'The Wrekin', emoji:'⛰', color:'#437a22', region:'Telford · 25mi NW', alt:'407m', tags:['SSSI','AONB','Sched.Mon.'], tagClasses:['tag-sssi','tag-aonb','tag-sm'], land:'Raby Estate — road verge TOAL', difficulty:'Easy', mapCenter:[52.6650,-2.553], mapZoom:14,
+    points:[
+      {id:'wr1',label:'LP1',name:'Forest Glen Road Verge',ll:[52.6640,-2.5497],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SJ 629 075',alt:'~135m',surf:'Tarmac road verge',land:'Public highway — NOT SWT land',desc:'Wide grass verge on approach road to Forest Glen. Public highway outside SWT car park boundary. 5-min walk to summit path.',warn:'SSSI + AONB. Paragliders from summit — scan sky before launch. Scheduled Monument on summit — do not land on hillfort earthworks.'},
+      {id:'wr2',label:'LP2',name:'Spout Lane Verge',ll:[52.6620,-2.5620],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SJ 621 072',alt:'~120m',surf:'Tarmac verge — unclassified lane',land:'Public highway — Spout Lane (OSM Way 64441562)',desc:'OSM-verified: coords land on Spout Lane (unclassified public highway, OS data). Previously mislabelled as Ercall Lane — actual Ercall Lane is 2.7km north in Wrockwardine. Spout Lane is the southern approach road to The Wrekin. Good open sky. Avoids congested Wellington one-way system.',warn:'Do not enter woodland boundary to launch — check for Forestry England byelaw notices. The Wrekin Hill Fort (Scheduled Monument) is on the summit — do not land on earthworks.'},
+      {id:'wr3',label:'SUM',name:'Wrekin Summit',ll:[52.66917,-2.55139],status:'ref',dot:'dot-b',bs:'badge-ref',sc:'s-ref',os:'SJ 628 080',alt:'407m (1,335ft)',surf:'Open summit — Sched. Monument',land:'Raby Estate',desc:'Summit: trig pillar, toposcope, TV mast (52m), Iron Age hillfort. OSM-exact. Navigation reference only.',warn:'Scheduled Monument — do not land on earthworks. 52m TV mast — maintain clearance.'}
+    ]
+  },
+  { id:'clent', name:'Clent Hills', emoji:'🌿', color:'#6b3fa0', region:'Worcestershire · 15mi S', alt:'316m (Walton Hill)', tags:['NT','AONB'], tagClasses:['tag-nt','tag-aonb'], land:'National Trust — road verge TOAL', difficulty:'Easy', mapCenter:[52.424,-2.064], mapZoom:14,
+    points:[
+      {id:'cl1',label:'LP1',name:"St Kenelm's Road Verge",ll:[52.4195,-2.0640],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 958 801',alt:'~260m',surf:'Tarmac road verge',land:"Public highway — St Kenelm's Road (tertiary)",desc:"Verified road verge on St Kenelm's Road (OSM Way 37899910, tertiary highway) on the southern approach to Walton Hill. Public highway land — NOT NT. Previous coords resolved to NT/parking land (Yewtree Place). 10-min walk to Walton Hill summit via footpath.",warn:'NT land begins at the field boundary above the road. TOAL from road verge only. Confirm you are below the NT boundary signs. Busy weekends.'},
+      {id:'cl2',label:'REF',name:'Nimmings Wood Car Park',ll:[52.4243,-2.0620],status:'no',dot:'dot-r',bs:'badge-no',sc:'s-no',os:'SO 959 806',alt:'~260m',surf:'NT car park',land:'National Trust',desc:'Main NT car park. Park here and use road verge (LP1). DO NOT launch from car park.',warn:'NT no-drone byelaw applies.'},
+      {id:'cl3',label:'SUM',name:'Walton Hill Summit',ll:[52.4218,-2.0730],status:'ref',dot:'dot-b',bs:'badge-ref',sc:'s-ref',os:'SO 952 804',alt:'316m (1,037ft)',surf:'Open hill — NT',land:'National Trust',desc:'Highest point on the Clent Hills. Navigation reference. Views to Wrekin, Malverns, Welsh Hills.',warn:'NT land — no launch.'}
+    ]
+  },
+  { id:'kinver', name:'Kinver Edge', emoji:'🪨', color:'#c05a00', region:'Staffordshire · 12mi SW', alt:'196m', tags:['NT','SSSI'], tagClasses:['tag-nt','tag-sssi'], land:'National Trust — road verge TOAL', difficulty:'Easy', mapCenter:[52.453,-2.225], mapZoom:14,
+    points:[
+      {id:'kv1',label:'LP1',name:'Hyde Lane Road Verge',ll:[52.4553,-2.2354],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 841 841',alt:'~130m',surf:'Tarmac road verge — unclassified lane',land:'Public highway — Hyde Lane (OSM Way 4723178)',desc:'OSM-verified verge on Hyde Lane (unclassified public highway, postcode DY7 6FD). Previous coords snapped to a private leisure track (Sterrymere Gardens). Hyde Lane runs along the western fringe of Kinver Edge and is the standard public access road. Clear sky toward the sandstone ridge.',warn:'NT land starts at the escarpment edge above the lane. TOAL from road verge only. Weekdays quietest.'},
+      {id:'kv2',label:'REF',name:'NT Compton Rd Car Park',ll:[52.4525,-2.2230],status:'no',dot:'dot-r',bs:'badge-no',sc:'s-no',os:'SO 849 838',alt:'~115m',surf:'NT car park',land:'National Trust',desc:'Main NT car park. Park here, use road verge (LP1) for launch. DY7 6DL for sat-nav.',warn:'NT no-drone byelaw.'}
+    ]
+  },
+  { id:'stiperstones', name:'Stiperstones', emoji:'🗿', color:'#7a5c1e', region:'Shropshire · 40mi SW', alt:'537m (Manstone Rock)', tags:['SSSI','AONB','NNR'], tagClasses:['tag-sssi','tag-aonb','tag-sm'], land:'Natural England NNR — CRoW open access', difficulty:'Moderate', mapCenter:[52.582,-2.948], mapZoom:13,
+    points:[
+      {id:'st1',label:'LP1',name:'Stiperstones Village Car Park',ll:[52.5835,-2.9570],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 352 988',alt:'~380m',surf:'Gravel car park / verge',land:'Public road / CRoW open access',desc:'Small car park at NE end of NNR off the minor road. CRoW Act open access land — no specific TOAL ban confirmed. 15-min walk to Manstone Rock.',warn:'NNR — wildlife priority. Avoid Apr–Jul breeding season (merlin, curlew, red grouse). Check Natural England guidance before flying.'},
+      {id:'st2',label:'SUM',name:'Manstone Rock (Highest Tor)',ll:[52.5819,-2.9350],status:'ref',dot:'dot-b',bs:'badge-ref',sc:'s-ref',os:'SO 367 986',alt:'537m (1,762ft)',surf:'Quartzite ridge — open access',land:'Natural England NNR',desc:'Highest point on the Stiperstones ridge — dramatic quartzite tors. Navigation reference. Unique jagged skyline.',warn:'SSSI + NNR. Avoid disturbing wildlife. Do not land on the tors.'}
+    ]
+  },
+  { id:'clee', name:'Titterstone Clee', emoji:'📡', color:'#005080', region:'Shropshire · 35mi SW', alt:'533m', tags:['AONB','Common Land'], tagClasses:['tag-aonb','tag-fe'], land:'Common land — open access, no ban confirmed', difficulty:'Easy', mapCenter:[52.400,-2.600], mapZoom:13,
+    points:[
+      {id:'tc1',label:'LP1',name:'Old Quarry Track Parking',ll:[52.3990,-2.6010],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 592 780',alt:'~490m',surf:'Stone track / open hardstanding',land:'Common land — open access',desc:'Drive up old quarry track from A4117 to derelict quarry buildings. Park on hardstanding. Grey Arrows community confirms no landowner permission required. Dramatic industrial ruins + panoramic views.',warn:'Former MOD site — no active restrictions confirmed. Track rough but passable in dry conditions.'},
+      {id:'tc2',label:'LP2',name:'A4117 Verge Layby',ll:[52.4015,-2.5965],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 595 783',alt:'~350m',surf:'Tarmac road verge / layby',land:'Public highway',desc:'Layby on the A4117 below the summit. Public highway — unambiguous TOAL. Walk up track from here.',warn:'A4117 carries through traffic. Launch when road is clear.'},
+      {id:'tc3',label:'SUM',name:'Titterstone Clee Summit',ll:[52.39758,-2.60252],status:'ref',dot:'dot-b',bs:'badge-ref',sc:'s-ref',os:'SO 591 779',alt:'533m (1,749ft)',surf:'Open moorland — common land',land:'Common land',desc:'Summit: former RAF radar station, derelict structures, views from Snowdonia to Cotswolds. Navigation reference.',warn:''}
+    ]
+  },
+  { id:'cannock', name:'Cannock Chase', emoji:'🌲', color:'#2e7d32', region:'Staffordshire · 15mi NE', alt:'244m (Castle Ring)', tags:['AONB','Forestry Eng.','Permit req.'], tagClasses:['tag-aonb','tag-fe','tag-sm'], land:'Forestry England — drone permit required', difficulty:'Easy (with permit)', mapCenter:[52.740,-1.975], mapZoom:13,
+    points:[
+      {id:'cc1',label:'LP1',name:'Glacial Boulder Car Park',ll:[52.7510,-1.9850],status:'caution',dot:'dot-a',bs:'badge-caut',sc:'s-caut',os:'SK 011 170',alt:'~220m',surf:'Forestry England car park',land:'Forestry England — permit required',desc:'Established drone base on Cannock Chase. Forestry England byelaw requires a permit to fly from ANY point in the forest including car parks and public rights of way. Apply at forestryengland.uk first.',warn:'Do NOT fly without a Forestry England permit. Chase Road off Camp Road, Brocton, near Rugeley.'},
+      {id:'cc2',label:'LP2',name:'Birches Valley Forest Centre',ll:[52.7515,-1.9745],status:'caution',dot:'dot-a',bs:'badge-caut',sc:'s-caut',os:'SK 019 168',alt:'~180m',surf:'Forestry England visitor centre & car park',land:'Forestry England — permit required',desc:'OSM-verified: node 1403381951 (Birches Valley Forest Centre, operator: Forestry Commission, WS15 2UH). Previous coords were 2.5km off, landing on an MTB cycleway. Main visitor car park at 52.7522,-1.9738. Good base for a full day shoot once permit obtained.',warn:'Same Forestry England permit requirement as LP1. One application covers multiple days. WS15 2UH.'}
+    ]
+  },
+  { id:'malvern', name:'Malvern Hills', emoji:'🌄', color:'#8e44ad', region:'Worcestershire · 40mi S', alt:'425m (Worcs Beacon)', tags:['AONB','MHT','SSSI'], tagClasses:['tag-aonb','tag-mht','tag-sssi'], land:'Malvern Hills Trust — B4232 road verge TOAL', difficulty:'Moderate', mapCenter:[52.092,-2.344], mapZoom:13,
+    points:[
+      {id:'mh1',label:'LP1',name:'B4232 North Quarry Verge',ll:[52.1060,-2.3450],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 764 453',alt:'~250m',surf:'Road verge / quarry pull-in',land:'Public highway — B4232',desc:'Road verge layby on B4232 (west side) near North Quarry car park. Public highway outside MHT managed land. Clear sky west toward Herefordshire plain.',warn:'MHT owns ridge land — check signage on arrival. AONB. Morning flights quietest.'},
+      {id:'mh2',label:'REF',name:'British Camp Car Park',ll:[52.0630,-2.3370],status:'ref',dot:'dot-b',bs:'badge-ref',sc:'s-ref',os:'SO 770 405',alt:'~180m',surf:'MHT car park (paid £4)',land:'Malvern Hills Trust',desc:'Large MHT car park at A449/B4232 junction. Good base for southern Malverns. Herefordshire Beacon hillfort nearby.',warn:'MHT land — use B4232 verge (LP1) for TOAL.'},
+      {id:'mh3',label:'BCN',name:'Worcestershire Beacon Summit',ll:[52.10480,-2.33895],status:'ref',dot:'dot-b',bs:'badge-ref',sc:'s-ref',os:'SO 769 452',alt:'425m (1,394ft)',surf:'Open ridge — MHT',land:'Malvern Hills Trust',desc:'Highest point on the Malverns — 425m. Navigation reference. Views to 14 counties on a clear day.',warn:'MHT land. Launch from B4232 verge below.'}
+    ]
+  },
+  { id:'wenlock', name:'Wenlock Edge', emoji:'🌳', color:'#1a5276', region:'Shropshire · 30mi SW', alt:'~340m', tags:['NT (parts)','SSSI','AONB'], tagClasses:['tag-nt','tag-sssi','tag-aonb'], land:'Mixed — NT sections + private. B4371 verge TOAL', difficulty:'Easy', mapCenter:[52.565,-2.642], mapZoom:12,
+    points:[
+      {id:'we1',label:'LP1',name:'B4371 Longville Layby',ll:[52.5420,-2.6900],status:'go',dot:'dot-g',bs:'badge-go',sc:'s-go',os:'SO 533 940',alt:'~280m',surf:'Tarmac road layby',land:'Public highway — B4371',desc:'Roadside layby on B4371 where it runs along the escarpment top. Public highway — clear sky south over escarpment edge. Spectacular views toward Long Mynd and Shropshire Plain.',warn:'NT owns sections of ridge either side — confirm you are on road verge. Ideal for slow orbital tracking shots.'},
+      {id:'we2',label:'LP2',name:"Major's Leap Viewpoint",ll:[52.5885,-2.5922],status:'caution',dot:'dot-a',bs:'badge-caut',sc:'s-caut',os:'SO 592 969',alt:'~300m',surf:'Viewpoint pull-in on B4371',land:'Adjacent to NT — verify on arrival',desc:"OSM-verified: node 9308836697 (Major's Leap, tourism:viewpoint) on B4371 at Presthope, Much Wenlock TF13 6DF. Previous coords were 8km wrong — landing near Longville in the Dale. Famous viewpoint above Hope Dale. Road verge pull-in off B4371.",warn:"Confirm TOAL position is on B4371 highway verge — NT boundary runs close. Busy with cyclists in summer."}
+    ]
+  }
+];
+
+// ================================================================
+// MAP INIT
+// ================================================================
+const map = L.map('map', { center: [52.34, -2.45], zoom: 9, zoomControl: false });
+// Custom panes — must be created immediately after map, before any layers
+map.createPane('customBoundaryPane'); map.getPane('customBoundaryPane').style.zIndex = 450;
+map.createPane('customMarkerPane');   map.getPane('customMarkerPane').style.zIndex  = 460;
+const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  subdomains: 'abcd', maxZoom: 19,
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>'
+}).addTo(map);
+tileLayer.on('tileerror', () => {
+  if (!window._fb) { window._fb=true; map.eachLayer(l=>{if(l instanceof L.TileLayer) map.removeLayer(l);}); L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'}).addTo(map); }
+});
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+// ================================================================
+// BOUNDARY LAYER GROUPS
+// ================================================================
+const layerGroups = { nt: L.layerGroup(), sssi: L.layerGroup(), aonb: L.layerGroup(), other: L.layerGroup() };
+Object.values(layerGroups).forEach(g => g.addTo(map));
+
+function addBoundary(group, coords, color, dash, fillOpacity, weight) {
+  if (!coords || coords.length < 3) return;
+  L.polygon(coords, {
+    color: color, weight: weight || 2, dashArray: dash || null,
+    fillColor: color, fillOpacity: fillOpacity, opacity: 0.85
+  }).addTo(layerGroups[group]);
+}
+
+// Draw all boundaries
+Object.entries(BOUNDARIES).forEach(([siteId, b]) => {
+  // NT — orange solid
+  if (b.nt)     addBoundary('nt',    b.nt,     '#ef7620', null,  0.13, 2.5);
+  // SSSI — purple dashed
+  if (b.sssi)   addBoundary('sssi',  b.sssi,   '#a12c7b', '8 5', 0.07, 2);
+  // AONB / NL — blue thin solid
+  if (b.aonb)   addBoundary('aonb',  b.aonb,   '#006494', null,  0.05, 1.5);
+  // NNR — green dashed (other group)
+  if (b.nnr)    addBoundary('other', b.nnr,    '#437a22', '6 4', 0.08, 2);
+  // MHT — purple dashed (other group)
+  if (b.mht)    addBoundary('other', b.mht,    '#8e44ad', '7 4', 0.09, 2);
+  // Raby Estate — tan dashed (other group)
+  if (b.raby)   addBoundary('other', b.raby,   '#7a5c1e', '5 5', 0.06, 1.5);
+  // Common land — blue-grey dashed (other group)
+  if (b.common) addBoundary('other', b.common, '#005080', '4 4', 0.08, 1.5);
+});
+
+function toggleLayer(name, on) {
+  if (on) layerGroups[name].addTo(map);
+  else    map.removeLayer(layerGroups[name]);
+}
+
+// ================================================================
+// MARKERS
+// ================================================================
+const statusColors = { go:'#437a22', caution:'#964219', no:'#a12c7b', ref:'#006494' };
+const statusText   = { go:'✓ Viable TOAL', caution:'⚠ Caution — see notes', no:'✕ No launch', ref:'◎ Reference' };
+
+function makeLPIcon(lp) {
+  const c = statusColors[lp.status];
+  const pulse = lp.status === 'go';
+  const size = pulse ? 38 : 28;
+  const inner = pulse ? 22 : 28;
+  const html = pulse
+    ? `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${c}22;border:2px solid ${c}55;display:flex;align-items:center;justify-content:center;animation:pulse 2s ease-in-out infinite;"><div style="width:${inner}px;height:${inner}px;border-radius:50%;background:${c};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;font-family:sans-serif;">${lp.label}</div></div>`
+    : `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${c};border:2.5px solid rgba(255,255,255,0.5);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;font-family:sans-serif;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${lp.label}</div>`;
+  return L.divIcon({ html, iconSize:[size,size], iconAnchor:[size/2,size/2], className:'' });
+}
+
+function makeSiteIcon(site) {
+  const size = 42;
+  const html = `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${site.color};border:3px solid rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 10px rgba(0,0,0,0.35);cursor:pointer;">${site.emoji}</div>`;
+  return L.divIcon({ html, iconSize:[size,size], iconAnchor:[size/2,size/2], className:'' });
+}
+
+const ks = document.createElement('style');
+ks.textContent = '@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(67,122,34,0.4)}50%{box-shadow:0 0 0 8px rgba(67,122,34,0)}}';
+document.head.appendChild(ks);
+
+let activeSite = null;
+let siteMarkerMap = {};
+let lpMarkerMap   = {};
+
+SITES.forEach(site => {
+  const lats = site.points.map(p=>p.ll[0]), lons = site.points.map(p=>p.ll[1]);
+  const cLat = lats.reduce((a,b)=>a+b,0)/lats.length, cLon = lons.reduce((a,b)=>a+b,0)/lons.length;
+  const m = L.marker([cLat,cLon], { icon:makeSiteIcon(site), zIndexOffset:100 }).addTo(map);
+  m.on('click', () => selectSite(site.id));
+  siteMarkerMap[site.id] = m;
+  lpMarkerMap[site.id] = [];
+});
+
+function showLPMarkers(site) {
+  SITES.forEach(s => { lpMarkerMap[s.id].forEach(m=>map.removeLayer(m)); lpMarkerMap[s.id]=[]; });
+  site.points.forEach(lp => {
+    const m = L.marker(lp.ll, { icon:makeLPIcon(lp) }).addTo(map);
+    m.on('click', () => {
+      m.bindPopup(`<div class="lpopup"><div class="lpopup-site">${site.name}</div><div class="lpopup-name">${lp.name}</div><div class="lpopup-coord">${lp.ll[0].toFixed(5)}, ${lp.ll[1].toFixed(5)}</div><div class="lpopup-coord">${lp.os}</div><div class="lpopup-status ${lp.sc}">${statusText[lp.status]}</div></div>`,{maxWidth:240}).openPopup();
+      openPanel(); renderTab('points');
+      setTimeout(()=>{ const card=document.getElementById('lpc-'+lp.id); if(card){ document.querySelectorAll('.lp-card').forEach(c=>c.classList.remove('open','active')); card.classList.add('open','active'); card.scrollIntoView({behavior:'smooth',block:'nearest'}); } },80);
+    });
+    lpMarkerMap[site.id].push(m);
+  });
+}
+
+// ================================================================
+// SITE PILLS
+// ================================================================
+const siteBar = document.getElementById('siteBar');
+SITES.forEach(site => {
+  const pill = document.createElement('button');
+  pill.className = 'site-pill'; pill.id = 'pill-'+site.id;
+  pill.style.background = site.color; pill.style.color = '#fff';
+  pill.innerHTML = `<span class="pill-dot"></span>${site.name}`;
+  pill.addEventListener('click', () => selectSite(site.id));
+  siteBar.appendChild(pill);
+});
+
+function selectSite(id) {
+  const site = SITES.find(s=>s.id===id); if (!site) return;
+  activeSite = id;
+  document.querySelectorAll('.site-pill').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pill-'+id).classList.add('active');
+  map.flyTo(site.mapCenter, site.mapZoom, {duration:0.8});
+  showLPMarkers(site);
+  SITES.forEach(s => { if(s.id===id) map.removeLayer(siteMarkerMap[s.id]); else { if(!map.hasLayer(siteMarkerMap[s.id])) siteMarkerMap[s.id].addTo(map); } });
+  openPanel(); setTabActive('points'); renderTab('points');
+}
+
+function clearSite() {
+  activeSite = null;
+  SITES.forEach(s => { lpMarkerMap[s.id].forEach(m=>map.removeLayer(m)); lpMarkerMap[s.id]=[]; if(!map.hasLayer(siteMarkerMap[s.id])) siteMarkerMap[s.id].addTo(map); });
+  document.querySelectorAll('.site-pill').forEach(p=>p.classList.remove('active'));
+  map.flyTo([52.34,-2.45], 9, {duration:0.8});
+  setTabActive('overview'); renderTab('overview');
+}
+
+// ================================================================
+// PANEL
+// ================================================================
+const panel = document.getElementById('panel'), grip = document.getElementById('grip');
+let panelOpen = false;
+function openPanel()  { panel.classList.remove('closed'); panelOpen=true; }
+function closePanel() { panel.classList.add('closed');    panelOpen=false; }
+grip.addEventListener('click', ()=>panelOpen?closePanel():openPanel());
+function setTabActive(name) { document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===name)); }
+document.querySelectorAll('.tab').forEach(btn => { btn.addEventListener('click', ()=>{ setTabActive(btn.dataset.t); renderTab(btn.dataset.t); openPanel(); }); });
+
+// ================================================================
+// TAB RENDERERS
+// ================================================================
+function renderTab(tab) {
+  const el = document.getElementById('pbody');
+  if      (tab==='overview')  renderOverview(el);
+  else if (tab==='points')    renderPoints(el);
+  else if (tab==='mypoints')  renderMyPoints(el);
+  else if (tab==='legend')    renderLegend(el);
+  else                        renderRules(el);
+}
+
+function renderOverview(el) {
+  el.innerHTML = `<div class="overview-grid">`+
+    SITES.map(s=>`<div class="ov-card" onclick="selectSite('${s.id}')"><div class="ov-row">
+      <div class="ov-icon" style="background:${s.color}22;">${s.emoji}</div>
+      <div class="ov-info">
+        <div class="ov-name" style="color:${s.color}">${s.name}</div>
+        <div class="ov-meta">${s.region} · ${s.alt} · ${s.difficulty}</div>
+        <div class="site-tags" style="margin-top:0.3rem;">${s.tags.map((t,i)=>`<span class="tag ${s.tagClasses[i]}">${t}</span>`).join('')}</div>
+      </div><span class="ov-arrow">›</span></div></div>`).join('')+
+    `</div><div class="disclaimer" style="margin-top:0.75rem;">Tap any site to zoom in. Shaded areas show NT (orange), SSSI (purple), AONB (blue) and other designations. Toggle layers using the controls on the map. Always verify boundaries on <a href="https://magic.defra.gov.uk" target="_blank">MAGIC</a> before flying.</div>`;
+}
+
+function renderPoints(el) {
+  const site = SITES.find(s=>s.id===activeSite);
+  if (!site) { renderOverview(el); return; }
+  el.innerHTML = `
+    <div class="site-hdr">
+      <div class="site-badge-big" style="background:${site.color}18;">${site.emoji}</div>
+      <div><div class="site-info-name" style="color:${site.color}">${site.name}</div>
+      <div class="site-info-sub">${site.region} · ${site.alt} · ${site.land}</div>
+      <div class="site-tags">${site.tags.map((t,i)=>`<span class="tag ${site.tagClasses[i]}">${t}</span>`).join('')}</div></div>
+    </div>
+    <button onclick="clearSite()" style="font-size:11px;color:var(--primary);margin-bottom:0.6rem;display:flex;align-items:center;gap:0.25rem;">‹ All sites</button>
+    <div class="lp-list">`+
+    site.points.map(lp=>`<div class="lp-card" id="lpc-${lp.id}" tabindex="0">
+      <div class="lp-head">
+        <div class="lp-dot ${lp.dot}">${lp.label}</div>
+        <div class="lp-name">${lp.name}</div>
+        <span class="badge ${lp.bs}">${lp.status==='go'?'TOAL':lp.status==='caution'?'Caution':lp.status==='no'?'No Launch':'Ref'}</span>
+      </div>
+      <div class="lp-body">
+        <div class="lp-meta">
+          <span class="mk">Coords</span><span class="mv mono">${lp.ll[0].toFixed(5)}, ${lp.ll[1].toFixed(5)}</span>
+          <span class="mk">OS Grid</span><span class="mv mono">${lp.os}</span>
+          <span class="mk">Alt</span><span class="mv">${lp.alt}</span>
+          <span class="mk">Surface</span><span class="mv">${lp.surf}</span>
+          <span class="mk">Land</span><span class="mv">${lp.land}</span>
+        </div>
+        <div class="lp-note">${lp.desc}</div>
+        ${lp.warn?`<div class="lp-warn">⚠ ${lp.warn}</div>`:''}
+        <a class="btn-maps" href="https://maps.google.com/?q=${lp.ll[0]},${lp.ll[1]}" target="_blank" rel="noopener">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open in Google Maps
+        </a>
+      </div></div>`).join('')+
+    `</div>`;
+  el.querySelectorAll('.lp-card').forEach(card=>{
+    const toggle=()=>{ const isOpen=card.classList.contains('open'); el.querySelectorAll('.lp-card').forEach(c=>c.classList.remove('open','active')); if(!isOpen){ card.classList.add('open','active'); const lpId=card.id.replace('lpc-',''); const lp=site.points.find(p=>p.id===lpId); if(lp) map.panTo(lp.ll); } };
+    card.addEventListener('click',toggle);
+    card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();}});
+  });
+}
+
+function renderLegend(el) {
+  el.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">Boundary Shading</div>
+    <div class="legend-grid">
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(239,118,32,0.35);border:2px solid #ef7620;"></div><div><div class="leg-lbl" style="color:#964219">National Trust</div><div class="leg-sub">Orange fill — no-drone byelaw applies</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(161,44,123,0.15);border:2px dashed #a12c7b;"></div><div><div class="leg-lbl" style="color:#a12c7b">SSSI</div><div class="leg-sub">Purple dashed — wildlife caution</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(0,100,148,0.12);border:2px solid #006494;"></div><div><div class="leg-lbl" style="color:#006494">AONB / Nat. Landscape</div><div class="leg-sub">Blue — no additional ban</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(67,122,34,0.15);border:2px dashed #437a22;"></div><div><div class="leg-lbl" style="color:#437a22">NNR (Natural England)</div><div class="leg-sub">Green dashed — Stiperstones</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(142,68,173,0.15);border:2px dashed #8e44ad;"></div><div><div class="leg-lbl" style="color:#8e44ad">Malvern Hills Trust</div><div class="leg-sub">Purple — owns the ridge</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(122,92,30,0.15);border:2px dashed #7a5c1e;"></div><div><div class="leg-lbl" style="color:#7a5c1e">Raby Estate (Wrekin)</div><div class="leg-sub">Tan — private estate, not NT</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(0,80,128,0.15);border:2px dashed #005080;"></div><div><div class="leg-lbl" style="color:#005080">Common Land (Clee)</div><div class="leg-sub">Blue-grey — open access</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:rgba(46,125,50,0.2);border:2px dashed #2e7d32;"></div><div><div class="leg-lbl" style="color:#2e7d32">Forestry England (Cannock)</div><div class="leg-sub">AONB — drone permit req.</div></div></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:0.75rem 0 0.4rem;">Launch Point Markers</div>
+    <div class="legend-grid">
+      <div class="leg-item"><div class="leg-sw" style="background:#437a22;border-radius:50%;"></div><div><div class="leg-lbl" style="color:#437a22">Viable TOAL (Green)</div><div class="leg-sub">Road verge / public land</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:#964219;border-radius:50%;"></div><div><div class="leg-lbl" style="color:#964219">Caution (Amber)</div><div class="leg-sub">Conditions apply — see notes</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:#a12c7b;border-radius:50%;"></div><div><div class="leg-lbl" style="color:#a12c7b">No Launch (Red)</div><div class="leg-sub">Managed land byelaw</div></div></div>
+      <div class="leg-item"><div class="leg-sw" style="background:#006494;border-radius:50%;"></div><div><div class="leg-lbl" style="color:#006494">Reference (Blue)</div><div class="leg-sub">Navigation landmark only</div></div></div>
+    </div>
+    <div class="disclaimer">Boundary polygons are approximations based on OS grid data, Natural England SSSI records, and NT/MHT property extents. Always verify exact boundaries on <a href="https://magic.defra.gov.uk" target="_blank">MAGIC</a> before flying.</div>`;
+}
+
+function renderRules(el) {
+  el.innerHTML = `
+    <div class="rule-group"><div class="rule-title">Before Every Flight</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>Carry CAA Operator ID + Flyer ID — both required for Mini 5 Pro (249g with camera)</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>Check <a href="https://nats.aero/uas/" target="_blank">NATS Drone Assist</a> for live airspace at every site</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>YouTube filming = commercial → minimum £5m third-party liability insurance</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>Max 400ft AGL · maintain visual line of sight · no flying over crowds</div></div>
+    <div class="rule-group"><div class="rule-title">Land Ownership Quick Reference</div>
+      <div class="rule-row"><span class="rdot rdot-r"></span><strong>NT</strong> (Clent, Kinver, Long Mynd, Wenlock parts) — no-drone byelaw; road verges only</div>
+      <div class="rule-row"><span class="rdot rdot-a"></span><strong>Forestry England</strong> (Cannock) — byelaw; permit required at <a href="https://www.forestryengland.uk/article/filming-photography-and-drones" target="_blank">forestryengland.uk</a></div>
+      <div class="rule-row"><span class="rdot rdot-a"></span><strong>Malvern Hills Trust</strong> — owns the ridge; B4232 road verges are safest TOAL</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span><strong>Raby Estate</strong> (Wrekin) — not NT, no confirmed byelaw; road verge TOAL low-risk</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span><strong>Common land / CRoW</strong> (Stiperstones, Clee) — no specific ban confirmed; respect wildlife</div></div>
+    <div class="rule-group"><div class="rule-title">Wildlife &amp; Seasonal</div>
+      <div class="rule-row"><span class="rdot rdot-r"></span>Avoid Mar–Aug at SSSI sites: Long Mynd (curlew, merlin), Stiperstones (red grouse, merlin), Wrekin (raptors)</div>
+      <div class="rule-row"><span class="rdot rdot-a"></span>Best window for all sites: <strong>September–February</strong> — low sun, no nesting, dramatic light</div>
+      <div class="rule-row"><span class="rdot rdot-a"></span>Scheduled Monuments (Wrekin hillfort) — overfly only, do not land on earthworks</div></div>
+    <div class="rule-group"><div class="rule-title">Priority Order</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>1. <strong>Long Mynd</strong> — most dramatic + OSM-verified TOAL points</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>2. <strong>Titterstone Clee</strong> — easiest access, unique ruins, no confirmed ban</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>3. <strong>The Wrekin</strong> — closest, road verge TOAL confirmed</div>
+      <div class="rule-row"><span class="rdot rdot-g"></span>4. <strong>Stiperstones</strong> — most visually unique; longer drive</div>
+      <div class="rule-row"><span class="rdot rdot-a"></span>5. <strong>Cannock Chase</strong> — easy access but permit needed first</div></div>
+    <div class="disclaimer">This map is a planning aid only — not legal advice. Always verify on <a href="https://magic.defra.gov.uk" target="_blank">MAGIC</a>. Contact Natural England (ProtectedSites@naturalengland.org.uk) for formal permission queries.</div>`;
+}
+
+// ================================================================
+// ADD POINT — INTERACTIVE PINNING
+// ================================================================
+const LS_KEY = 'midlands_custom_points';
+let addMode = false;
+let pendingLatLng = null;
+let customPoints = [];
+let customMarkers = [];
+
+function loadCustomPoints() {
+  try { customPoints = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { customPoints = []; }
+}
+function saveCustomPoints() {
+  localStorage.setItem(LS_KEY, JSON.stringify(customPoints));
+}
+loadCustomPoints();
+
+const statusDotClass = { go:'dot-g', caution:'dot-a', no:'dot-r', ref:'dot-b' };
+const statusBadgeClass = { go:'badge-go', caution:'badge-caut', no:'badge-no', ref:'badge-ref' };
+const statusScClass = { go:'s-go', caution:'s-caut', no:'s-no', ref:'s-ref' };
+const statusLabelMap = { go:'TOAL', caution:'Caution', no:'No Launch', ref:'Ref' };
+
+function makeCustomIcon(pt) {
+  const c = statusColors[pt.status] || '#437a22';
+  const html = `<div style="width:32px;height:32px;border-radius:50%;background:${c};border:2.5px solid rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.4);box-sizing:border-box;">${pt.label}</div>`;
+  return L.divIcon({ html, iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-16], className:'custom-lp-icon' });
+}
+
+function renderCustomMarkers() {
+  customMarkers.forEach(m => map.removeLayer(m));
+  customMarkers = [];
+  customPoints.forEach(pt => {
+    const m = L.marker([pt.lat, pt.lon], {
+      icon: makeCustomIcon(pt),
+      pane: 'customMarkerPane',
+      zIndexOffset: 500
+    }).addTo(map);
+    m.on('click', () => {
+      m.bindPopup(`<div class="lpopup">
+        <div class="lpopup-site" style="color:#6b3fa0">My Points</div>
+        <div class="lpopup-name">${pt.name}</div>
+        <div class="lpopup-coord">${pt.lat.toFixed(5)}, ${pt.lon.toFixed(5)}</div>
+        <div class="lpopup-status ${statusScClass[pt.status]}">${statusText[pt.status]}</div>
+      </div>`, {maxWidth:240}).openPopup();
+      openPanel(); setTabActive('mypoints'); renderTab('mypoints');
+    });
+    customMarkers.push(m);
+  });
+}
+renderCustomMarkers();
+
+function toggleAddMode() {
+  addMode = !addMode;
+  const btn = document.getElementById('btnAddPoint');
+  const lbl = document.getElementById('addPointLabel');
+  const mapEl = document.getElementById('map');
+  if (addMode) {
+    btn.classList.add('adding');
+    btn.title = 'Cancel — tap map to pin';
+    btn.textContent = '✕';
+    lbl.classList.add('vis');
+    mapEl.classList.add('map-adding');
+    showAddBanner();
+    closePanel();
+  } else {
+    cancelAddMode();
+  }
+}
+
+function cancelAddMode() {
+  addMode = false;
+  const btn = document.getElementById('btnAddPoint');
+  const lbl = document.getElementById('addPointLabel');
+  const mapEl = document.getElementById('map');
+  btn.classList.remove('adding');
+  btn.title = 'Add a launch point';
+  btn.textContent = '+';
+  lbl.classList.remove('vis');
+  mapEl.classList.remove('map-adding');
+  removeAddBanner();
+}
+
+let bannerEl = null;
+function showAddBanner() {
+  removeAddBanner();
+  bannerEl = document.createElement('div');
+  bannerEl.className = 'add-banner';
+  bannerEl.textContent = 'Tap anywhere on the map to pin a point';
+  document.getElementById('map-wrap').appendChild(bannerEl);
+}
+function removeAddBanner() {
+  if (bannerEl) { bannerEl.remove(); bannerEl = null; }
+}
+
+map.on('click', function(e) {
+  if (!addMode) return;
+  // Ignore map clicks while the form sheet is open
+  if (document.getElementById('addSheet').classList.contains('open')) return;
+  pendingLatLng = e.latlng;
+  cancelAddMode();
+  openAddSheet(pendingLatLng);
+});
+
+function openAddSheet(latlng) {
+  document.getElementById('sheetCoords').textContent =
+    latlng.lat.toFixed(5) + ', ' + latlng.lng.toFixed(5);
+  document.getElementById('fName').value = '';
+  document.getElementById('fLabel').value = 'LP1';
+  document.getElementById('fStatus').value = 'go';
+  document.getElementById('fSurf').value = '';
+  document.getElementById('fLand').value = '';
+  document.getElementById('fNotes').value = '';
+  document.getElementById('fWarn').value = '';
+  // Store coords in hidden fields — JS variable can be lost before save fires
+  document.getElementById('fLat').value = latlng.lat;
+  document.getElementById('fLon').value = latlng.lng;
+  document.getElementById('addSheet').classList.add('open');
+  setTimeout(() => document.getElementById('fName').focus(), 300);
+}
+
+function closeAddSheet() {
+  document.getElementById('addSheet').classList.remove('open');
+  pendingLatLng = null;
+}
+
+function savePoint() {
+  // Read coordinates from hidden inputs — immune to JS variable timing issues
+  const lat = parseFloat(document.getElementById('fLat').value);
+  const lon = parseFloat(document.getElementById('fLon').value);
+  if (isNaN(lat) || isNaN(lon)) {
+    const sd = document.getElementById('sheetCoords');
+    if (sd) sd.textContent = '⚠ Location lost — close form, tap + and pin again.';
+    return;
+  }
+  const name = document.getElementById('fName').value.trim();
+  if (!name) { document.getElementById('fName').focus(); document.getElementById('fName').style.borderColor='#a12c7b'; return; }
+  document.getElementById('fName').style.borderColor = '';
+
+  const pt = {
+    id:     'cust_' + Date.now(),
+    name,
+    label:  document.getElementById('fLabel').value,
+    status: document.getElementById('fStatus').value,
+    surf:   document.getElementById('fSurf').value.trim() || 'Not specified',
+    land:   document.getElementById('fLand').value.trim() || 'Not specified',
+    notes:  document.getElementById('fNotes').value.trim(),
+    warn:   document.getElementById('fWarn').value.trim(),
+    lat:    lat,
+    lon:    lon,
+    saved:  new Date().toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}),
+    boundaries: null
+  };
+
+  // Save immediately — boundary fetch is blocked in the iframe sandbox
+  // MAGIC map button in the card lets user check designations externally
+  pt.boundaries = null;
+  customPoints.unshift(pt);
+  saveCustomPoints();
+
+  closeAddSheet();
+  renderCustomMarkers();
+  openPanel();
+  setTabActive('mypoints');
+  renderTab('mypoints');
+  setTimeout(() => {
+    toggleMyCard(pt.id);
+    map.panTo([pt.lat, pt.lon]);
+  }, 150);
+}
+
+// ================================================================
+// BOUNDARY DETECTION
+// ================================================================
+const BDET_APIS = [
+  {
+    key:  'sssi',
+    url:  'https://services.arcgis.com/JJzESW51TqeY9uat/arcgis/rest/services/SSSI_England/FeatureServer/0/query',
+    name: 'NAME',
+    label: 'SSSI'
+  },
+  {
+    key:  'aonb',
+    url:  'https://services.arcgis.com/JJzESW51TqeY9uat/arcgis/rest/services/Areas_of_Outstanding_Natural_Beauty_England/FeatureServer/0/query',
+    name: 'NAME',
+    label: 'AONB'
+  },
+  {
+    key:  'nt',
+    url:  'https://services-eu1.arcgis.com/NPIbx47lsIiu2pqz/arcgis/rest/services/National_Trust_Open_Data_Land_Always_Open/FeatureServer/0/query',
+    name: 'Name',
+    label: 'NT'
+  }
+];
+
+// Layer group for live-fetched custom boundaries (separate from baked-in ones)
+const customBoundaryLayer = L.layerGroup().addTo(map);
+const customBoundaryStore = {};  // id -> array of L.polygon
+
+function buildQueryUrl(apiUrl, lon, lat) {
+  const p = new URLSearchParams({
+    where: '1=1',
+    geometry: `${lon},${lat}`,
+    geometryType: 'esriGeometryPoint',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    outFields: '*',
+    returnGeometry: 'true',
+    outSR: '4326',
+    f: 'geojson'
+  });
+  return `${apiUrl}?${p.toString()}`;
+}
+
+// Timeout using Promise.race — guaranteed to resolve even in sandboxed iframes
+// where AbortController.abort() may be silently ignored
+function timedFetch(url, ms) {
+  const timeout = new Promise(resolve => setTimeout(() => resolve(null), ms));
+  const req = fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+  return Promise.race([req, timeout]);
+}
+
+async function detectBoundaries(lat, lon) {
+  const results = { sssi:[], aonb:[], nt:[] };
+
+  // Hard overall cap: if ALL three APIs haven't responded in 9s, return empty
+  const overallTimeout = new Promise(resolve => setTimeout(resolve, 9000));
+
+  const work = Promise.allSettled(
+    BDET_APIS.map(api =>
+      timedFetch(buildQueryUrl(api.url, lon, lat), 7000)
+        .then(gj => {
+          if (gj && gj.features && gj.features.length > 0) {
+            results[api.key] = gj.features.map(f => ({
+              name: f.properties[api.name] || api.label,
+              geometry: f.geometry
+            }));
+          }
+        })
+        .catch(() => {})
+    )
+  );
+
+  await Promise.race([work, overallTimeout]);
+  return results;
+}
+
+const bdColors = {
+  nt:   { color:'#ef7620', fill:0.13, dash: null,  weight:2.5 },
+  sssi: { color:'#a12c7b', fill:0.07, dash:'8 5',  weight:2   },
+  aonb: { color:'#006494', fill:0.05, dash: null,  weight:1.5 }
+};
+
+function geojsonCoordsToLatLng(geometry) {
+  // Returns array of arrays of [lat,lon] rings suitable for L.polygon
+  if (!geometry) return [];
+  const toRing = ring => ring.map(c => [c[1], c[0]]);
+  if (geometry.type === 'Polygon') {
+    return geometry.coordinates.map(toRing);
+  } else if (geometry.type === 'MultiPolygon') {
+    // Flatten multipolygon into separate polygon calls
+    return geometry.coordinates.map(poly => poly.map(toRing));
+  }
+  return [];
+}
+
+function drawCustomBoundaries(pt) {
+  if (!pt.boundaries) return;
+  const polys = [];
+  ['nt','sssi','aonb'].forEach(key => {
+    const feats = pt.boundaries[key] || [];
+    const s = bdColors[key];
+    feats.forEach(feat => {
+      const rings = geojsonCoordsToLatLng(feat.geometry);
+      if (!rings.length) return;
+      const addPoly = (r) => {
+        const poly = L.polygon(r, {
+          color: s.color, weight: s.weight, dashArray: s.dash,
+          fillColor: s.color, fillOpacity: s.fill, opacity: 0.9,
+          pane: 'customBoundaryPane'
+        }).addTo(customBoundaryLayer);
+        poly.bindPopup(
+          `<div class="lpopup"><div class="lpopup-site">${key.toUpperCase()}</div><div class="lpopup-name">${feat.name}</div></div>`,
+          { maxWidth: 220 }
+        );
+        polys.push(poly);
+      };
+      if (feat.geometry.type === 'MultiPolygon') {
+        rings.forEach(r => addPoly(r));
+      } else {
+        addPoly(rings);
+      }
+    });
+  });
+  customBoundaryStore[pt.id] = polys;
+}
+
+function showBoundariesForPoint(ptId) {
+  // Clear all custom boundary highlights, redraw just this point's
+  customBoundaryLayer.clearLayers();
+  customBoundaryStore[ptId] = customBoundaryStore[ptId] || [];
+  const pt = customPoints.find(p => p.id === ptId);
+  if (pt && pt.boundaries) drawCustomBoundaries(pt);
+}
+
+function clearCustomBoundaries() {
+  customBoundaryLayer.clearLayers();
+}
+
+function buildLandString(boundaries, fallback) {
+  if (!boundaries || boundaries.error) return fallback;
+  const parts = [];
+  if (boundaries.nt   && boundaries.nt.length)   parts.push('NT');
+  if (boundaries.sssi && boundaries.sssi.length) parts.push('SSSI');
+  if (boundaries.aonb && boundaries.aonb.length) parts.push('AONB');
+  if (!parts.length) return fallback;
+  return parts.join(' + ') + ' — ' + (fallback !== 'Not specified' ? fallback : 'see detected boundaries');
+}
+
+// ================================================================
+// MY POINTS TAB RENDERER
+// ================================================================
+function renderBoundaryTags(pt) {
+  const b = pt.boundaries;
+  if (!b) return '';
+  if (b.error) return `<div class="bdet-error">⚠ Boundary check timed out — tap Recheck to retry</div>`;
+  const tags = [];
+  if (b.nt   && b.nt.length)   b.nt.forEach(f   => tags.push(`<span class="bdet-tag nt">NT · ${f.name}</span>`));
+  if (b.sssi && b.sssi.length) b.sssi.forEach(f => tags.push(`<span class="bdet-tag sssi">SSSI · ${f.name}</span>`));
+  if (b.aonb && b.aonb.length) b.aonb.forEach(f => tags.push(`<span class="bdet-tag aonb">AONB · ${f.name}</span>`));
+  if (!tags.length) return `<div class="bdet-none">No NT, SSSI or AONB detected at this point</div>`;
+  return `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:0.5rem;margin-bottom:0.25rem;">Detected designations</div><div class="bdet-tag-row">${tags.join('')}</div>`;
+}
+
+function renderMyPoints(el) {
+  if (customPoints.length === 0) {
+    el.innerHTML = `
+      <div class="my-empty">
+        <div class="my-empty-icon">📍</div>
+        <strong>No saved points yet</strong><br>
+        Tap the <strong style="color:var(--primary)">+</strong> button on the map,
+        then tap any location to pin a new launch point.
+        Points are saved to this device.
+      </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:10.5px;color:var(--muted);margin-bottom:0.6rem;">Saved to this device · ${customPoints.length} point${customPoints.length!==1?'s':''}</div>`
+    + customPoints.map((pt,i) => {
+      const dc = statusDotClass[pt.status];
+      const bc = statusBadgeClass[pt.status];
+      const hasBoundaries = pt.boundaries && !pt.boundaries.error &&
+        (['nt','sssi','aonb'].some(k => pt.boundaries[k] && pt.boundaries[k].length));
+      return `<div class="my-card" id="myc-${pt.id}">
+        <div class="my-card-head" onclick="toggleMyCard('${pt.id}')">
+          <div class="lp-dot ${dc}" style="width:26px;height:26px;font-size:9px;">${pt.label}</div>
+          <div class="my-card-name">${pt.name}</div>
+          <span class="badge ${bc}">${statusLabelMap[pt.status]}</span>
+        </div>
+        <div class="my-card-body">
+          <div class="my-meta">
+            <span class="mk">Coords</span><span class="mv mono">${pt.lat.toFixed(5)}, ${pt.lon.toFixed(5)}</span>
+            <span class="mk">Surface</span><span class="mv">${pt.surf}</span>
+            <span class="mk">Land</span><span class="mv">${pt.land}</span>
+            <span class="mk">Added</span><span class="mv">${pt.saved}</span>
+          </div>
+          ${renderBoundaryTags(pt)}
+          ${pt.notes ? `<div class="lp-note" style="margin-bottom:0.4rem;margin-top:0.4rem;">${pt.notes}</div>` : ''}
+          ${pt.warn  ? `<div class="lp-warn">⚠ ${pt.warn}</div>` : ''}
+          <div class="my-actions" style="margin-top:0.5rem;">
+            <button class="btn-sm primary" onclick="flyToCustom(${pt.lat},${pt.lon})">📍 Fly to</button>
+            ${hasBoundaries ? `<button class="btn-sm" onclick="showBoundariesForPoint('${pt.id}')">Show bounds</button>` : ''}
+            <a class="btn-sm" href="https://magic.defra.gov.uk/MagicMap.aspx?startTopic=Designations&activeLayers=sssiIndex,aonbIndex&query=POINT(${pt.lon}%20${pt.lat})" target="_blank" rel="noopener">MAGIC map</a>
+            <a class="btn-sm" href="https://maps.google.com/?q=${pt.lat},${pt.lon}" target="_blank" rel="noopener">Google Maps</a>
+            <button class="btn-sm" onclick="toggleExport('${pt.id}')">Export</button>
+            <button class="btn-sm danger" id="delbtn-${pt.id}" onclick="confirmDelete('${pt.id}')">✕ Delete</button>
+          </div>
+          <div class="export-box" id="exp-${pt.id}">${buildExport(pt)}</div>
+        </div>
+      </div>`;
+    }).join('');
+}
+
+async function recheckBoundaries(id) {
+  const pt = customPoints.find(p => p.id === id);
+  if (!pt) return;
+  const card = document.getElementById('myc-' + id);
+  if (card) {
+    const actionsEl = card.querySelector('.my-actions');
+    if (actionsEl) actionsEl.innerHTML = `<div class="bdet-status"><div class="bdet-spinner"></div><span class="bdet-text">Checking boundaries…</span></div>`;
+  }
+  try {
+    const result = await detectBoundaries(pt.lat, pt.lon);
+    pt.boundaries = result;
+    pt.land = buildLandString(result, pt.land);
+    saveCustomPoints();
+    drawCustomBoundaries(pt);
+  } catch(e) {
+    pt.boundaries = { error: true };
+    saveCustomPoints();
+  }
+  renderMyPoints(document.getElementById('pbody'));
+  setTimeout(() => toggleMyCard(id), 50);
+}
+
+function toggleMyCard(id) {
+  const card = document.getElementById('myc-' + id);
+  const isOpen = card.classList.contains('open');
+  document.querySelectorAll('.my-card').forEach(c => c.classList.remove('open'));
+  if (!isOpen) card.classList.add('open');
+}
+
+function flyToCustom(lat, lon) {
+  map.flyTo([lat, lon], 15, {duration: 0.8});
+}
+
+function confirmDelete(id) {
+  // Remove any existing confirm rows first
+  document.querySelectorAll('.delete-confirm').forEach(el => el.remove());
+  const btn = document.getElementById('delbtn-' + id);
+  if (!btn) return;
+  const row = document.createElement('div');
+  row.className = 'delete-confirm';
+  row.id = 'delconfirm-' + id;
+  row.innerHTML = `<span>Delete this point?</span>
+    <button class="btn-confirm-no" onclick="cancelDelete('${id}')">Cancel</button>
+    <button class="btn-confirm-yes" onclick="deletePoint('${id}')">Yes, delete</button>`;
+  btn.parentElement.insertAdjacentElement('afterend', row);
+  // Auto-cancel after 6 seconds
+  setTimeout(() => cancelDelete(id), 6000);
+}
+
+function cancelDelete(id) {
+  const row = document.getElementById('delconfirm-' + id);
+  if (row) row.remove();
+}
+
+function deletePoint(id) {
+  customPoints = customPoints.filter(p => p.id !== id);
+  saveCustomPoints();
+  renderCustomMarkers();
+  // Remove stored boundary polygons for this point
+  if (customBoundaryStore[id]) {
+    customBoundaryStore[id].forEach(p => customBoundaryLayer.removeLayer(p));
+    delete customBoundaryStore[id];
+  }
+  renderMyPoints(document.getElementById('pbody'));
+}
+
+function toggleExport(id) {
+  const box = document.getElementById('exp-' + id);
+  const vis = box.classList.toggle('vis');
+  if (vis) {
+    // Select all text for easy copy
+    const range = document.createRange();
+    range.selectNodeContents(box);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+function buildExport(pt) {
+  const statusMap = { go:'go', caution:'caution', no:'no', ref:'ref' };
+  const dotMap    = { go:'dot-g', caution:'dot-a', no:'dot-r', ref:'dot-b' };
+  const badgeMap  = { go:'badge-go', caution:'badge-caut', no:'badge-no', ref:'badge-ref' };
+  const scMap     = { go:'s-go', caution:'s-caut', no:'s-no', ref:'s-ref' };
+  return `{id:'${pt.id}',label:'${pt.label}',name:'${pt.name}',
+ ll:[${pt.lat.toFixed(5)},${pt.lon.toFixed(5)}],
+ status:'${pt.status}',
+ dot:'${dotMap[pt.status]}',bs:'${badgeMap[pt.status]}',sc:'${scMap[pt.status]}',
+ os:'',alt:'',surf:'${pt.surf}',
+ land:'${pt.land}',
+ desc:'${pt.notes.replace(/'/g,"\\'") }',
+ warn:'${pt.warn.replace(/'/g,"\\'") }'}`;
+}
+
+// ================================================================
+// INIT
+// ================================================================
+// Block Leaflet from treating any UI overlay as a map interaction.
+// Done ONCE here rather than on every openAddSheet call.
+(function blockLeafletOnOverlays() {
+  // For panel, layerToggle, siteBar — full click propagation block is fine
+  ['panel','layerToggle','siteBar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.disableScrollPropagation(el);
+    }
+  });
+  // For addSheet: only block scroll propagation + stop map-click via mousedown on the sheet body.
+  // Do NOT use disableClickPropagation on addSheet — it swallows button onclick events.
+  const sheet = document.getElementById('addSheet');
+  if (sheet) {
+    L.DomEvent.disableScrollPropagation(sheet);
+    L.DomEvent.on(sheet, 'mousedown touchstart', L.DomEvent.stopPropagation);
+  }
+})();
+
+setTimeout(()=>{ openPanel(); renderTab('overview'); }, 400);
+setTimeout(()=>{ map.invalidateSize(); }, 500);
+
+// Save/Cancel wired via onclick attributes above
+</script>
+</body>
+</html>
