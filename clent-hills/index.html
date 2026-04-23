@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Clent Hills &#x2014; Drone Launch Points</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f8fa;--surface:#fff;--border:#e2e5ea;--divider:#f0f1f4;
+  --text:#1a1d23;--muted:#6b7280;
+  --accent:#5a6e1f;--accent2:#6e8624;
+  --nt:#ef7620;--sssi:#a12c7b;--toal:#437a22;
+  --shadow:0 1px 4px rgba(0,0,0,.10);--shadow-lg:0 4px 24px rgba(0,0,0,.13);
+  --r:10px;--r-lg:16px;--t:0.18s ease;
+}
+html,body{height:100%;background:var(--bg);font-family:system-ui,-apple-system,sans-serif;color:var(--text);font-size:14px}
+#map-wrap{position:relative;width:100%;height:100vh;overflow:hidden}
+#map{width:100%;height:100%}
+.site-bar{position:absolute;top:.5rem;left:0;right:0;z-index:400;display:flex;gap:.3rem;padding:0 .6rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;pointer-events:none}
+.site-bar::-webkit-scrollbar{display:none}
+.site-pill{display:inline-flex;align-items:center;padding:.28rem .6rem;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:var(--shadow);cursor:pointer;pointer-events:all;border:2px solid transparent;transition:all var(--t);background:var(--surface);color:var(--text)}
+.site-pill.active{background:var(--accent);color:#fff}
+.panel{position:absolute;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:var(--shadow-lg);z-index:400;transition:transform var(--t);max-height:75vh;display:flex;flex-direction:column}
+.panel.closed{transform:translateY(calc(100% - 48px))}
+.panel-grip{padding:.5rem 1rem 0;cursor:pointer;flex-shrink:0;user-select:none;-webkit-user-select:none}
+.panel-grip-bar{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto .35rem}
+.panel-tabs{display:flex;border-bottom:1px solid var(--divider);flex-shrink:0;padding:0 .75rem;gap:.15rem;overflow-x:auto;scrollbar-width:none}
+.panel-tabs::-webkit-scrollbar{display:none}
+.tab{padding:.45rem .75rem;font-size:12px;font-weight:600;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all var(--t)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.panel-body{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:.75rem .875rem 2rem;flex:1}
+.layer-toggle{position:absolute;bottom:3.5rem;right:.75rem;z-index:401;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-lg);padding:.55rem .7rem;min-width:140px}
+.layer-toggle-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.35rem}
+.layer-row{display:flex;align-items:center;gap:.4rem;font-size:12px;font-weight:500;cursor:pointer;padding:.18rem 0}
+.layer-row input{accent-color:var(--accent);width:14px;height:14px}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot-nt{background:var(--nt)}.dot-sssi{background:var(--sssi)}.dot-toal{background:var(--toal)}
+.section-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:.9rem 0 .4rem}
+.lp-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);margin-bottom:.55rem;overflow:hidden;cursor:pointer}
+.lp-card-hdr{display:flex;align-items:center;gap:.5rem;padding:.5rem .65rem}
+.lp-badge{font-size:9px;font-weight:800;padding:.2rem .45rem;border-radius:4px;background:var(--accent);color:#fff;flex-shrink:0}
+.lp-name{font-size:13px;font-weight:600;flex:1}
+.lp-status{font-size:10px;font-weight:700;padding:.18rem .45rem;border-radius:4px}
+.s-go{background:#d1fae5;color:#065f46}.s-caut{background:#fef3c7;color:#92400e}.s-no{background:#fee2e2;color:#991b1b}
+.lp-body{padding:.4rem .65rem .65rem;border-top:1px solid var(--divider);display:none;font-size:12px;line-height:1.55}
+.lp-body.open{display:block}
+.lp-row{display:flex;gap:.4rem;margin-bottom:.2rem}
+.lp-lbl{color:var(--muted);width:72px;flex-shrink:0}
+.lp-val{font-weight:500;flex:1}
+.lp-warn{background:#fff7ed;border-left:3px solid #f59e0b;padding:.35rem .5rem;border-radius:0 4px 4px 0;font-size:11.5px;margin-top:.35rem;color:#78350f}
+.lp-actions{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
+.btn-sm{font-size:11px;font-weight:600;padding:.25rem .6rem;border-radius:6px;border:none;cursor:pointer}
+.btn-fly{background:var(--accent);color:#fff}.btn-gmap{background:#e8f5e9;color:#1b5e20}
+.legend-row{display:flex;align-items:flex-start;gap:.6rem;margin-bottom:.55rem;font-size:12.5px}
+.legend-swatch{width:22px;height:14px;border-radius:3px;flex-shrink:0;margin-top:2px}
+.sw-nt{background:rgba(239,118,32,.15);border:2px solid #ef7620}
+.sw-sssi{background:rgba(161,44,123,.1);border:2px dashed #a12c7b}
+.rules-block{background:#f0f7ff;border-left:3px solid var(--accent);padding:.5rem .7rem;border-radius:0 var(--r) var(--r) 0;margin-bottom:.6rem;font-size:12.5px;line-height:1.6}
+.rules-block strong{display:block;margin-bottom:.2rem;font-size:13px}
+.btn-add-point{position:absolute;bottom:4.2rem;right:.75rem;z-index:402;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;font-size:22px;font-weight:300;border:none;cursor:pointer;box-shadow:var(--shadow-lg);display:flex;align-items:center;justify-content:center;transition:background var(--t)}
+.btn-add-point.adding{background:#c0392b}
+.add-label{position:absolute;bottom:4.35rem;right:3.6rem;z-index:402;background:rgba(0,0,0,.72);color:#fff;font-size:11px;padding:.2rem .45rem;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity var(--t)}
+.add-label.vis{opacity:1}
+.map-adding{cursor:crosshair !important}
+.map-adding .leaflet-interactive{cursor:crosshair !important}
+.add-banner{position:absolute;top:2.8rem;left:50%;transform:translateX(-50%);z-index:410;background:rgba(90,110,31,.92);color:#fff;padding:.4rem .9rem;border-radius:20px;font-size:12px;font-weight:600;pointer-events:none;white-space:nowrap}
+.add-sheet{position:absolute;bottom:0;left:0;right:0;z-index:420;background:var(--surface);border-top:1px solid var(--border);border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .28s cubic-bezier(.16,1,.3,1);max-height:82vh;display:flex;flex-direction:column}
+.add-sheet.open{transform:translateY(0)}
+.add-sheet-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:.7rem .875rem .3rem;flex-shrink:0}
+.add-sheet-title{font-size:14px;font-weight:700;flex:1}
+.add-sheet-coords{font-size:10.5px;color:var(--muted);font-family:monospace;margin-top:.15rem}
+.add-sheet-close{width:28px;height:28px;border-radius:50%;border:none;background:var(--divider);cursor:pointer;font-size:14px}
+.form-actions{padding:.4rem .875rem 0;flex-shrink:0;display:flex;gap:.5rem}
+.btn-save{flex:1;padding:.55rem;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+.btn-cancel{padding:.55rem 1rem;background:var(--divider);border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.add-sheet-body{overflow-y:auto;padding:.6rem .875rem 1.5rem;flex:1}
+.form-row{margin-bottom:.65rem}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.65rem}
+.form-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.25rem}
+.form-input,.form-select,.form-textarea{width:100%;border:1.5px solid var(--border);border-radius:7px;padding:.45rem .55rem;font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;transition:border-color var(--t)}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent)}
+.form-textarea{resize:none;height:56px}
+.myp-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);margin-bottom:.55rem;overflow:hidden}
+.myp-hdr{display:flex;align-items:center;gap:.4rem;padding:.5rem .65rem;cursor:pointer}
+.myp-name{font-size:13px;font-weight:600;flex:1}
+.myp-body{padding:.4rem .65rem .65rem;border-top:1px solid var(--divider);display:none;font-size:12px;line-height:1.55}
+.myp-body.open{display:block}
+.del-confirm{display:none;background:#fee2e2;border-radius:7px;padding:.4rem .55rem;margin-top:.35rem;font-size:12px}
+.del-confirm.show{display:flex;align-items:center;gap:.4rem}
+.btn-del-confirm{background:#dc2626;color:#fff;border:none;border-radius:5px;padding:.2rem .5rem;font-size:11px;font-weight:700;cursor:pointer}
+.btn-del-cancel{background:var(--border);border:none;border-radius:5px;padding:.2rem .5rem;font-size:11px;font-weight:600;cursor:pointer}
+.lpopup{font-family:system-ui,sans-serif;min-width:160px}
+.lpopup-site{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.2rem}
+.lpopup-name{font-size:14px;font-weight:700;margin-bottom:.2rem}
+.lpopup-coord{font-size:10.5px;color:var(--muted);font-family:monospace;margin-bottom:.3rem}
+.lpopup-status{font-size:11px;font-weight:700;padding:.2rem .45rem;border-radius:4px;display:inline-block}
+</style>
+</head>
+<body>
+<div id="map-wrap">
+  <div id="map"></div>
+  <div class="site-bar" id="siteBar">
+    <button class="site-pill active" onclick="flyTo(52.4185,-2.0750,14)">Clent Hills</button>
+    <button class="site-pill" onclick="flyTo(52.4156,-2.0730,15)">Walton Hill</button>
+    <button class="site-pill" onclick="flyTo(52.4215,-2.0815,15)">Adams Hill</button>
+    <button class="site-pill" onclick="flyTo(52.4255,-2.0895,15)">Nimmings</button>
+  </div>
+  <button class="btn-add-point" id="btnAddPoint" title="Add a launch point" onclick="toggleAddMode()">+</button>
+  <div class="add-label" id="addPointLabel">Tap map to pin</div>
+
+  <div class="add-sheet" id="addSheet">
+    <div class="add-sheet-hdr">
+      <div>
+        <div class="add-sheet-title">New Launch Point</div>
+        <div class="add-sheet-coords" id="sheetCoords"></div>
+      </div>
+      <button class="add-sheet-close" onclick="closeAddSheet()">&#x2715;</button>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn-cancel" onclick="closeAddSheet()">Cancel</button>
+      <button type="button" class="btn-save" onclick="savePoint()">Save Point</button>
+    </div>
+    <input type="hidden" id="fLat" value="">
+    <input type="hidden" id="fLon" value="">
+    <div class="add-sheet-body">
+      <div class="form-row">
+        <label class="form-label" for="fName">Point Name <span style="color:#a12c7b">*</span></label>
+        <input class="form-input" id="fName" type="text" placeholder="e.g. St Kenelm's Road Verge" autocomplete="off"/>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label class="form-label" for="fLabel">Label</label>
+          <select class="form-select" id="fLabel">
+            <option value="LP1">LP1</option><option value="LP2">LP2</option>
+            <option value="LP3">LP3</option><option value="REF">REF</option>
+            <option value="CAR">CAR</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label" for="fStatus">Status</label>
+          <select class="form-select" id="fStatus">
+            <option value="go">TOAL &#x2713;</option>
+            <option value="caution">Caution</option>
+            <option value="no">No-Launch</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="fNotes">Notes</label>
+        <textarea class="form-textarea" id="fNotes" placeholder="Surface, access, landmarks&#x2026;"></textarea>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="fWarn">Warning</label>
+        <textarea class="form-textarea" id="fWarn" placeholder="Restrictions, hazards&#x2026;"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel closed" id="panel">
+    <div class="panel-grip" id="grip"><div class="panel-grip-bar"></div></div>
+    <div class="panel-tabs" id="tabs">
+      <button class="tab on" data-t="info">Info</button>
+      <button class="tab" data-t="launch">Launch Points</button>
+      <button class="tab" data-t="mypoints">My Points</button>
+      <button class="tab" data-t="legend">Legend</button>
+      <button class="tab" data-t="rules">Rules</button>
+    </div>
+    <div class="panel-body" id="pbody"></div>
+  </div>
+
+  <div class="layer-toggle" id="layerToggle">
+    <div class="layer-toggle-title">Boundaries</div>
+    <label class="layer-row"><input type="checkbox" id="togNT" checked><span class="dot dot-nt"></span>NT Land</label>
+    <label class="layer-row"><input type="checkbox" id="togSSSI" checked><span class="dot dot-sssi"></span>SSSI</label>
+    <label class="layer-row"><input type="checkbox" id="togTOAL" checked><span class="dot dot-toal"></span>TOAL Zones</label>
+  </div>
+</div>
+
+<script>
+const LAUNCH_POINTS = [
+  {id:'lp1',label:'LP1',name:"St Kenelm's Road Verge",lat:52.4195,lon:-2.0640,status:'go',
+   surface:"Grass verge, public road (B4551 / St Kenelm's Road)",
+   access:"From A491 south of Hagley, take B4551 toward Clent village. Roadside verge 300m east of NT fence line.",
+   notes:"Primary TOAL — confirmed outside NT boundary. Clear sky south and east. ~600m from Walton Hill summit.",
+   warn:"NT land begins at the fence line to the west. Do not cross onto the hillside to launch.",
+   magic:"https://magic.defra.gov.uk/MagicMap.aspx"},
+  {id:'lp2',label:'LP2',name:'Nimmings Wood Car Park Road Verge',lat:52.4255,lon:-2.0895,status:'caution',
+   surface:'Public road verge on Hagley Wood Lane, outside NT car park entrance',
+   access:'Hagley Wood Lane, B62 0NL (NT Nimmings Wood car park). TOAL from road verge OUTSIDE the car park gate only.',
+   notes:'North-west approach. Good angle on Walton Hill and Nimmings Wood. Outside NT boundary when on road verge.',
+   warn:'NT car park is NT-managed land. Takeoff from public road verge only — outside the gate.',
+   magic:"https://magic.defra.gov.uk/MagicMap.aspx"},
+  {id:'lp3',label:'LP3',name:'Walton Hill Road East Verge',lat:52.4162,lon:-2.0658,status:'go',
+   surface:'Grass verge, Walton Hill Road (public road)',
+   access:'Walton Hill Road from Romsley. East-side verge south of Vine Inn junction.',
+   notes:'Closest public-road TOAL to Walton Hill summit (~250m). Good horizon views east toward Birmingham. Confirmed outside NT.',
+   warn:"Narrow lane. Park with care. Pedestrian footpath on roadside.",
+   magic:"https://magic.defra.gov.uk/MagicMap.aspx"}
+];
+
+const statusColors = {go:'#437a22',caution:'#d97706',no:'#dc2626',ref:'#4b5563'};
+const statusText   = {go:'TOAL ✓',caution:'Caution',no:'No-Launch',ref:'Reference'};
+const statusSc     = {go:'s-go',caution:'s-caut',no:'s-no',ref:'s-ref'};
+
+const map = L.map('map',{center:[52.4185,-2.0750],zoom:14,zoomControl:false});
+map.createPane('boundaryPane'); map.getPane('boundaryPane').style.zIndex=450;
+map.createPane('markerPane');   map.getPane('markerPane').style.zIndex=460;
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+  subdomains:'abcd',maxZoom:19,
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+}).addTo(map);
+L.control.zoom({position:'topright'}).addTo(map);
+
+const ntLayer   = L.layerGroup().addTo(map);
+const sssiLayer = L.layerGroup().addTo(map);
+const toalLayer = L.layerGroup().addTo(map);
+
+const CLENT_NT = [[52.4285,-2.094],[52.428,-2.087],[52.4265,-2.082],[52.425,-2.079],[52.423,-2.077],[52.4215,-2.075],[52.4205,-2.082],[52.4195,-2.083],[52.4165,-2.082],[52.415,-2.08],[52.414,-2.077],[52.413,-2.073],[52.4145,-2.07],[52.416,-2.068],[52.4175,-2.066],[52.4195,-2.0665],[52.4215,-2.069],[52.424,-2.072],[52.4255,-2.077],[52.427,-2.083],[52.4275,-2.088],[52.4285,-2.094]];
+const CLENT_SSSI = [{"name":"Romsley Hill SSSI","coords":[[52.41134,-2.06166],[52.41145,-2.06148],[52.41148,-2.06105],[52.41106,-2.06039],[52.4109,-2.06023],[52.41084,-2.06018],[52.41082,-2.06015],[52.41066,-2.05992],[52.41064,-2.05965],[52.41043,-2.05957],[52.41016,-2.05948],[52.41008,-2.05948],[52.41001,-2.05944],[52.40999,-2.05942],[52.40993,-2.05935],[52.40977,-2.05916],[52.40955,-2.0586],[52.4095,-2.05845],[52.40949,-2.05841],[52.40908,-2.05774],[52.40892,-2.05763],[52.40874,-2.05837],[52.40862,-2.05866],[52.40823,-2.05894],[52.40816,-2.05891],[52.40795,-2.05872],[52.40777,-2.05872],[52.40771,-2.05874],[52.40751,-2.0588],[52.40729,-2.05915],[52.40719,-2.05929],[52.40698,-2.05982],[52.40694,-2.06039],[52.40693,-2.06053],[52.40689,-2.06067],[52.4067,-2.06109],[52.40669,-2.06118],[52.40666,-2.06129],[52.40663,-2.06137],[52.40659,-2.06153],[52.40658,-2.06165],[52.40657,-2.06174],[52.4071,-2.06201],[52.40727,-2.06201],[52.40755,-2.0621],[52.40766,-2.06217],[52.40799,-2.06254],[52.40804,-2.06268],[52.40809,-2.06282],[52.40835,-2.06308],[52.40883,-2.06321],[52.40903,-2.06324],[52.4093,-2.06327],[52.40959,-2.0634],[52.40981,-2.06359],[52.41004,-2.06383],[52.41017,-2.06384],[52.41038,-2.06361],[52.41062,-2.06335],[52.41074,-2.0633],[52.41093,-2.06318],[52.41115,-2.06328],[52.41125,-2.06321],[52.4114,-2.06289],[52.41163,-2.06232],[52.4114,-2.06174],[52.41134,-2.06166]]},{"name":"Romsley Manor Farm SSSI","coords":[[52.41117,-2.05322],[52.41111,-2.05301],[52.41106,-2.0528],[52.41081,-2.05289],[52.4107,-2.05299],[52.41058,-2.05308],[52.41048,-2.05308],[52.41033,-2.05302],[52.41016,-2.05311],[52.41007,-2.05333],[52.40992,-2.05329],[52.40951,-2.05299],[52.40946,-2.05286],[52.4095,-2.05273],[52.40955,-2.05259],[52.40968,-2.0523],[52.40976,-2.05208],[52.40981,-2.0519],[52.40992,-2.05144],[52.40991,-2.05099],[52.40994,-2.05056],[52.40998,-2.05035],[52.40997,-2.0501],[52.40981,-2.04997],[52.40969,-2.04993],[52.40955,-2.0499],[52.40935,-2.04978],[52.40914,-2.04977],[52.409,-2.04981],[52.40866,-2.04997],[52.40827,-2.0501],[52.40797,-2.05015],[52.40774,-2.05009],[52.40751,-2.04994],[52.4073,-2.05058],[52.407,-2.0508],[52.40667,-2.05144],[52.40617,-2.05251],[52.40702,-2.0529],[52.40743,-2.05215],[52.40784,-2.05172],[52.40861,-2.05244],[52.40891,-2.05298],[52.40916,-2.05289],[52.40925,-2.05308],[52.40902,-2.05381],[52.40906,-2.05407],[52.40932,-2.05424],[52.40966,-2.05481],[52.40983,-2.05503],[52.41015,-2.05519],[52.41052,-2.05557],[52.41063,-2.05565],[52.41074,-2.05544],[52.41083,-2.05519],[52.41088,-2.05507],[52.41097,-2.05487],[52.41108,-2.05483],[52.41122,-2.05471],[52.41127,-2.05462],[52.41157,-2.0539],[52.4115,-2.05363],[52.41135,-2.05336],[52.41117,-2.05322]]}];
+
+L.polygon(CLENT_NT,{pane:'boundaryPane',color:'#ef7620',weight:2.5,fillColor:'#ef7620',fillOpacity:0.13})
+ .bindTooltip('National Trust — Clent Hills (~180ha)',{sticky:true}).addTo(ntLayer);
+
+CLENT_SSSI.forEach(s=>{
+  L.polygon(s.coords,{pane:'boundaryPane',color:'#a12c7b',weight:2,fillColor:'#a12c7b',fillOpacity:0.08,dashArray:'8 5'})
+   .bindTooltip(s.name,{sticky:true}).addTo(sssiLayer);
+});
+
+[{latlng:[52.4195,-2.0640],r:100,label:'LP1 TOAL Zone'},
+ {latlng:[52.4162,-2.0658],r:90,label:'LP3 TOAL Zone'}
+].forEach(z=>{
+  L.circle(z.latlng,{radius:z.r,pane:'boundaryPane',color:'#437a22',weight:2,fillColor:'#437a22',fillOpacity:0.12})
+   .bindTooltip(z.label).addTo(toalLayer);
+});
+
+document.getElementById('togNT').addEventListener('change',e=>e.target.checked?map.addLayer(ntLayer):map.removeLayer(ntLayer));
+document.getElementById('togSSSI').addEventListener('change',e=>e.target.checked?map.addLayer(sssiLayer):map.removeLayer(sssiLayer));
+document.getElementById('togTOAL').addEventListener('change',e=>e.target.checked?map.addLayer(toalLayer):map.removeLayer(toalLayer));
+
+function makeLPIcon(lp){
+  const c=statusColors[lp.status];
+  const html=`<div style="width:30px;height:30px;border-radius:50%;background:${c};border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;color:#fff;font-family:system-ui;box-shadow:0 2px 8px rgba(0,0,0,.4)">${lp.label}</div>`;
+  return L.divIcon({html,iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15],className:''});
+}
+LAUNCH_POINTS.forEach(lp=>{
+  const m=L.marker([lp.lat,lp.lon],{icon:makeLPIcon(lp),pane:'markerPane',zIndexOffset:100}).addTo(map);
+  m.on('click',()=>{
+    m.bindPopup(`<div class="lpopup"><div class="lpopup-site">Clent Hills</div><div class="lpopup-name">${lp.name}</div><div class="lpopup-coord">${lp.lat.toFixed(5)}, ${lp.lon.toFixed(5)}</div><div class="lpopup-status ${statusSc[lp.status]}">${statusText[lp.status]}</div></div>`,{maxWidth:220}).openPopup();
+    openPanel();setTabActive('launch');renderTab('launch');
+  });
+});
+
+const panel=document.getElementById('panel');
+let panelOpen=false;
+function openPanel(){panel.classList.remove('closed');panelOpen=true;}
+function closePanel(){panel.classList.add('closed');panelOpen=false;}
+document.getElementById('grip').addEventListener('click',()=>panelOpen?closePanel():openPanel());
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{setTabActive(btn.dataset.t);renderTab(btn.dataset.t);openPanel();});
+});
+function setTabActive(t){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));}
+function renderTab(t){
+  const body=document.getElementById('pbody');
+  if(t==='info')    body.innerHTML=renderInfo();
+  if(t==='launch')  body.innerHTML=renderLaunch();
+  if(t==='mypoints')body.innerHTML=renderMyPoints();
+  if(t==='legend')  body.innerHTML=renderLegend();
+  if(t==='rules')   body.innerHTML=renderRules();
+}
+
+function renderInfo(){return`<div class="section-title">Site Overview</div>
+  <div style="font-size:13px;line-height:1.6;margin-bottom:.7rem">National Trust-managed hills 10 miles SW of Birmingham. Adams Hill (Four Stones) and Walton Hill are the main NT holdings. Walton Hill summit is 316m ASL. Key rule: no takeoff from NT land &#x2014; TOAL from public road verges outside the NT boundary only.</div>
+  <div class="lp-row"><span class="lp-lbl">Area</span><span class="lp-val">180ha NT land (440 acres)</span></div>
+  <div class="lp-row"><span class="lp-lbl">Owner</span><span class="lp-val">National Trust</span></div>
+  <div class="lp-row"><span class="lp-lbl">Highest pt</span><span class="lp-val">Walton Hill 316m ASL</span></div>
+  <div class="lp-row"><span class="lp-lbl">Nearest town</span><span class="lp-val">Halesowen / Stourbridge</span></div>
+  <div class="section-title" style="margin-top:.9rem">Quick Links</div>
+  <a href="https://magic.defra.gov.uk/MagicMap.aspx" target="_blank" style="font-size:12px;color:var(--accent)">Open MAGIC Map &#x2197;</a><br>
+  <a href="https://www.nationaltrust.org.uk/clent-hills" target="_blank" style="font-size:12px;color:var(--accent)">NT Clent Hills page &#x2197;</a>`;}
+
+function renderLaunch(){return LAUNCH_POINTS.map(lp=>`
+  <div class="lp-card" id="card-${lp.id}">
+    <div class="lp-card-hdr" onclick="toggleCard('${lp.id}')">
+      <span class="lp-badge">${lp.label}</span>
+      <span class="lp-name">${lp.name}</span>
+      <span class="lp-status ${statusSc[lp.status]}">${statusText[lp.status]}</span>
+    </div>
+    <div class="lp-body" id="body-${lp.id}">
+      <div class="lp-row"><span class="lp-lbl">Coords</span><span class="lp-val" style="font-family:monospace">${lp.lat.toFixed(5)}, ${lp.lon.toFixed(5)}</span></div>
+      <div class="lp-row"><span class="lp-lbl">Surface</span><span class="lp-val">${lp.surface}</span></div>
+      <div class="lp-row"><span class="lp-lbl">Access</span><span class="lp-val">${lp.access}</span></div>
+      <div class="lp-row"><span class="lp-lbl">Notes</span><span class="lp-val">${lp.notes}</span></div>
+      ${lp.warn?`<div class="lp-warn">&#x26A0; ${lp.warn}</div>`:''}
+      <div class="lp-actions">
+        <button class="btn-sm btn-fly" onclick="map.flyTo([${lp.lat},${lp.lon}],16)">Fly to</button>
+        <a href="https://maps.google.com/?q=${lp.lat},${lp.lon}" target="_blank"><button class="btn-sm btn-gmap">Google Maps</button></a>
+        <a href="${lp.magic}" target="_blank"><button class="btn-sm" style="background:#e8f0fe;color:#1a237e">MAGIC Map</button></a>
+      </div>
+    </div>
+  </div>`).join('');}
+function toggleCard(id){document.getElementById('body-'+id)?.classList.toggle('open');}
+
+const LS_KEY='clent_custom_points';
+let customPoints=[];
+let customMarkers=[];
+let pendingLatLng=null;
+try{customPoints=JSON.parse(localStorage.getItem(LS_KEY)||'[]');}catch(e){customPoints=[];}
+function saveCustomPoints(){try{localStorage.setItem(LS_KEY,JSON.stringify(customPoints));}catch(e){}}
+
+function makeCustomIcon(pt){
+  const c=statusColors[pt.status]||'#437a22';
+  const html=`<div style="width:30px;height:30px;border-radius:50%;background:${c};border:2.5px solid rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;color:#fff;font-family:system-ui;box-shadow:0 2px 8px rgba(0,0,0,.4)">${pt.label}</div>`;
+  return L.divIcon({html,iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15],className:'custom-lp-icon'});
+}
+function renderCustomMarkers(){
+  customMarkers.forEach(m=>map.removeLayer(m));customMarkers=[];
+  customPoints.forEach(pt=>{
+    const m=L.marker([pt.lat,pt.lon],{icon:makeCustomIcon(pt),pane:'markerPane',zIndexOffset:500}).addTo(map);
+    m.on('click',()=>{
+      m.bindPopup(`<div class="lpopup"><div class="lpopup-site" style="color:#6b3fa0">My Points</div><div class="lpopup-name">${pt.name}</div><div class="lpopup-coord">${pt.lat.toFixed(5)}, ${pt.lon.toFixed(5)}</div><div class="lpopup-status ${statusSc[pt.status]||'s-go'}">${statusText[pt.status]||''}</div></div>`,{maxWidth:220}).openPopup();
+      openPanel();setTabActive('mypoints');renderTab('mypoints');
+    });
+    customMarkers.push(m);
+  });
+}
+renderCustomMarkers();
+
+function renderMyPoints(){
+  if(customPoints.length===0)return'<div style="font-size:13px;color:var(--muted);padding:.5rem 0">No custom points yet.<br>Tap + to add one.</div>';
+  return`<div style="font-size:10.5px;color:var(--muted);margin-bottom:.5rem">Saved to this device &middot; ${customPoints.length} point${customPoints.length!==1?'s':''}</div>`
+    +customPoints.map(pt=>`
+  <div class="myp-card">
+    <div class="myp-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
+      <span class="lp-badge" style="background:#6b3fa0">${pt.label}</span>
+      <span class="myp-name">${pt.name}</span>
+      <span class="lp-status ${statusSc[pt.status]||'s-go'}">${statusText[pt.status]||''}</span>
+    </div>
+    <div class="myp-body">
+      <div class="lp-row"><span class="lp-lbl">Coords</span><span class="lp-val" style="font-family:monospace">${pt.lat.toFixed(5)}, ${pt.lon.toFixed(5)}</span></div>
+      ${pt.notes?`<div class="lp-row"><span class="lp-lbl">Notes</span><span class="lp-val">${pt.notes}</span></div>`:''}
+      ${pt.warn?`<div class="lp-warn">&#x26A0; ${pt.warn}</div>`:''}
+      <div class="lp-actions">
+        <button class="btn-sm btn-fly" onclick="map.flyTo([${pt.lat},${pt.lon}],16)">Fly to</button>
+        <a href="https://maps.google.com/?q=${pt.lat},${pt.lon}" target="_blank"><button class="btn-sm btn-gmap">Maps</button></a>
+        <button class="btn-sm" style="background:#fee2e2;color:#991b1b" onclick="confirmDelete('${pt.id}')">Delete</button>
+      </div>
+      <div class="del-confirm" id="del-${pt.id}">
+        <span style="flex:1;font-size:11.5px">Delete this point?</span>
+        <button class="btn-del-confirm" onclick="doDelete('${pt.id}')">Yes</button>
+        <button class="btn-del-cancel" onclick="document.getElementById('del-${pt.id}').classList.remove('show')">No</button>
+      </div>
+    </div>
+  </div>`).join('');
+}
+function confirmDelete(id){document.getElementById('del-'+id)?.classList.add('show');}
+function doDelete(id){customPoints=customPoints.filter(p=>p.id!==id);saveCustomPoints();renderCustomMarkers();renderTab('mypoints');}
+
+function renderLegend(){return`<div class="section-title">Map Layers</div>
+  <div class="legend-row"><div class="legend-swatch sw-nt"></div><div><strong style="display:block;margin-bottom:.1rem">National Trust Land</strong>Adams Hill, Walton Hill, Nimmings Wood (~180ha). No takeoff from NT land. NT bylaws apply.</div></div>
+  <div class="legend-row"><div class="legend-swatch sw-sssi"></div><div><strong style="display:block;margin-bottom:.1rem">SSSI Boundary</strong>Romsley Hill &amp; Romsley Manor Farm SSSIs nearby. Flying permitted &#x2014; wildlife disturbance is an offence under the Wildlife &amp; Countryside Act 1981.</div></div>
+  <div class="legend-row"><div style="width:22px;height:14px;border-radius:3px;background:rgba(67,122,34,.12);border:2px solid #437a22;flex-shrink:0;margin-top:2px"></div><div><strong style="display:block;margin-bottom:.1rem">TOAL Zone</strong>Verified public-road verge outside NT boundary.</div></div>
+  <div class="legend-row"><div style="width:10px;height:10px;border-radius:50%;background:#437a22;margin-top:3px;flex-shrink:0"></div><div>Green = TOAL &#x2713; &nbsp; Amber = Caution &nbsp; Red = No-Launch</div></div>`;}
+
+function renderRules(){return`
+  <div class="rules-block"><strong>National Trust &#x2014; No Drone Takeoff on NT Land</strong>The NT operates a blanket no-drone-takeoff policy. TOAL from public road verges only, outside the NT boundary. The boundary shown is approximate &#x2014; when in doubt, stay on the road.</div>
+  <div class="rules-block"><strong>DJI Mini 5 Pro (249g) &#x2014; C0/C1 Class</strong>Open category A1. You may fly over NT land once airborne from a public verge. The NT restriction applies to takeoff/landing, not overflying.</div>
+  <div class="rules-block"><strong>SSSI Rules</strong>Romsley Hill SSSI ~1km SE of Walton Hill. No automatic flight ban. Disturbing protected wildlife (nesting birds Mar&#x2013;Jul) is an offence under the Wildlife &amp; Countryside Act 1981.</div>
+  <div class="rules-block"><strong>Proximity to Birmingham</strong>Clent Hills lies within the Birmingham FRZ transition zone. Check <a href="https://droneassist.com" target="_blank">Drone Assist</a> and <a href="https://nats.aero" target="_blank">NATS</a> before every flight.</div>
+  <div class="rules-block"><strong>Adams Hill vs Walton Hill</strong>Adams Hill (Four Stones) is NT &#x2014; no TOAL. Walton Hill Road and St Kenelm's Road verges are outside NT &#x2014; confirmed TOAL points LP1 and LP3.</div>`;}
+
+let addMode=false;
+function toggleAddMode(){
+  addMode=!addMode;
+  const btn=document.getElementById('btnAddPoint');
+  const lbl=document.getElementById('addPointLabel');
+  if(addMode){btn.classList.add('adding');btn.textContent='&#x2715;';lbl.classList.add('vis');document.getElementById('map').classList.add('map-adding');closePanel();}
+  else cancelAddMode();
+}
+function cancelAddMode(){
+  addMode=false;
+  document.getElementById('btnAddPoint').classList.remove('adding');
+  document.getElementById('btnAddPoint').textContent='+';
+  document.getElementById('addPointLabel').classList.remove('vis');
+  document.getElementById('map').classList.remove('map-adding');
+}
+map.on('click',function(e){
+  if(!addMode)return;
+  if(document.getElementById('addSheet').classList.contains('open'))return;
+  pendingLatLng=e.latlng;cancelAddMode();openAddSheet(pendingLatLng);
+});
+function openAddSheet(latlng){
+  document.getElementById('sheetCoords').textContent=latlng.lat.toFixed(5)+', '+latlng.lng.toFixed(5);
+  ['fName','fNotes','fWarn'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fLabel').value='LP1';
+  document.getElementById('fStatus').value='go';
+  document.getElementById('fLat').value=latlng.lat;
+  document.getElementById('fLon').value=latlng.lng;
+  document.getElementById('addSheet').classList.add('open');
+  setTimeout(()=>document.getElementById('fName').focus(),300);
+}
+function closeAddSheet(){document.getElementById('addSheet').classList.remove('open');pendingLatLng=null;}
+function savePoint(){
+  const lat=parseFloat(document.getElementById('fLat').value);
+  const lon=parseFloat(document.getElementById('fLon').value);
+  if(isNaN(lat)||isNaN(lon)){document.getElementById('sheetCoords').textContent='Location lost — close and try again.';return;}
+  const name=document.getElementById('fName').value.trim();
+  if(!name){document.getElementById('fName').focus();document.getElementById('fName').style.borderColor='#a12c7b';return;}
+  document.getElementById('fName').style.borderColor='';
+  const pt={id:'cust_'+Date.now(),name,label:document.getElementById('fLabel').value,status:document.getElementById('fStatus').value,notes:document.getElementById('fNotes').value.trim(),warn:document.getElementById('fWarn').value.trim(),lat,lon,saved:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})};
+  customPoints.unshift(pt);saveCustomPoints();closeAddSheet();renderCustomMarkers();
+  openPanel();setTabActive('mypoints');renderTab('mypoints');
+  setTimeout(()=>map.panTo([pt.lat,pt.lon]),150);
+}
+function flyTo(lat,lon,z){map.flyTo([lat,lon],z||14,{duration:1.2});}
+
+(function(){
+  ['panel','layerToggle','siteBar'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){L.DomEvent.disableClickPropagation(el);L.DomEvent.disableScrollPropagation(el);}
+  });
+  const sheet=document.getElementById('addSheet');
+  if(sheet){L.DomEvent.disableScrollPropagation(sheet);L.DomEvent.on(sheet,'mousedown touchstart',L.DomEvent.stopPropagation);}
+})();
+
+setTimeout(()=>{openPanel();renderTab('info');},400);
+setTimeout(()=>{map.invalidateSize();},500);
+</script>
+</body>
+</html>
